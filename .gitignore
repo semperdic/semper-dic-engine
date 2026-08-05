@@ -1,0 +1,24 @@
+# Build trees
+build/
+cmake-build-*/
+**/CMakeFiles/
+**/CMakeCache.txt
+**/compile_commands.json
+
+# Python
+**/__pycache__/
+*.egg-info/
+.venv/
+dist/
+wheelhouse/
+*.whl
+
+# IDE / OS
+.idea/
+.vscode/
+*.swp
+.DS_Store
+Thumbs.db
+
+# OpenCV sparse stubs regeneratable; keep generated build artifacts out
+third_party/opencv/build/

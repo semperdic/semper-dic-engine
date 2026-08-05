@@ -1,0 +1,55 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  host-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Sparse OpenCV checkout
+        run: bash scripts/sparse-opencv.sh
+
+      - name: Configure host tests
+        run: |
+          cmake -S tests -B build/tests -DCMAKE_BUILD_TYPE=Release
+
+      - name: Build
+        run: cmake --build build/tests -j$(nproc)
+
+      - name: Run dic_tests
+        run: ./build/tests/dic_tests
+
+  c-sdk-smoke:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Sparse OpenCV checkout
+        run: bash scripts/sparse-opencv.sh
+
+      - name: Configure C SDK
+        run: |
+          cmake -S . -B build/sdk \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DSEMPER_BUILD_C_SDK=ON \
+            -DSEMPER_BUILD_TESTS=OFF \
+            -DSEMPER_ANDROID=OFF
+
+      - name: Build semper_c + smoke
+        run: cmake --build build/sdk --target semper_c semper_c_smoke -j$(nproc)
+
+      - name: Run C smoke
+        run: |
+          SMOKE=$(find build/sdk -name semper_c_smoke -type f | head -n1)
+          test -n "$SMOKE"
+          "$SMOKE"

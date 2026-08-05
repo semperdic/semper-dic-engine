@@ -1,0 +1,29 @@
+[build-system]
+requires = ["scikit-build-core>=0.9", "pybind11>=2.12"]
+build-backend = "scikit_build_core.build"
+
+[project]
+name = "semper-dic"
+version = "0.1.0"                      # keep in sync with include/semper/version.hpp
+description = "Semper hybrid Delaunay Digital Image Correlation engine — Python bindings"
+requires-python = ">=3.9"
+dependencies = ["numpy>=1.21"]
+readme = "README.md"
+license = { text = "BSD-3-Clause" }
+classifiers = [
+    "License :: OSI Approved :: BSD License",
+    "Programming Language :: C++",
+    "Programming Language :: Python :: 3",
+    "Topic :: Scientific/Engineering",
+]
+
+[tool.scikit-build]
+# Engine repo root is two levels up from bindings/python/.
+cmake.source-dir = "../.."
+cmake.args = ["-DSEMPER_BUILD_PYTHON=ON", "-DSEMPER_BUILD_TESTS=OFF"]
+wheel.packages = ["semper"]
+
+[tool.cibuildwheel]
+build = "cp39-* cp310-* cp311-* cp312-*"
+test-requires = "pytest numpy"
+test-command = "pytest {project}/tests"
