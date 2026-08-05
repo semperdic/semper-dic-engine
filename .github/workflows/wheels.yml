@@ -1,9 +1,18 @@
 name: wheels
 
+# Wheel builds need a full engine tree + OpenCV inside cibuildwheel containers.
+# Tag pushes currently only ship source; publish wheels manually once the
+# monorepo sdist / manylinux packaging is ready.
+#
+# Do NOT trigger on tags until cmake.source-dir + CRT + OpenMP are proven in CI.
+
 on:
-  push:
-    tags: ["v*"]
   workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "Build wheels without uploading artifacts"
+        type: boolean
+        default: false
 
 jobs:
   build-wheels:
@@ -31,15 +40,24 @@ jobs:
       - name: Install cibuildwheel
         run: python -m pip install cibuildwheel
 
+      # Run from the engine root so the parent tree exists for cmake.source-dir.
+      # Skip win32 (OpenCV host build is amd64-focused) and musllinux for now.
       - name: Build wheels
-        working-directory: bindings/python
         env:
           CIBW_BUILD: "cp39-* cp310-* cp311-* cp312-*"
+          CIBW_SKIP: "*-win32 *-musllinux_* pp*"
           CIBW_TEST_REQUIRES: "pytest numpy"
           CIBW_TEST_COMMAND: "pytest {project}/tests"
-        run: python -m cibuildwheel --output-dir wheelhouse
+          # macOS: prefer libomp from Homebrew when present
+          CIBW_ENVIRONMENT_MACOS: >-
+            PATH="/opt/homebrew/opt/libomp/bin:/usr/local/opt/libomp/bin:$PATH"
+            LDFLAGS="-L/opt/homebrew/opt/libomp/lib -L/usr/local/opt/libomp/lib"
+            CPPFLAGS="-I/opt/homebrew/opt/libomp/include -I/usr/local/opt/libomp/include"
+        run: python -m cibuildwheel bindings/python --output-dir wheelhouse
 
       - uses: actions/upload-artifact@v4
+        if: ${{ !inputs.dry_run }}
         with:
           name: wheels-${{ matrix.os }}
-          path: bindings/python/wheelhouse/*.whl
+          path: wheelhouse/*.whl
+          if-no-files-found: warn

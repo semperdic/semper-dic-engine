@@ -14,6 +14,12 @@ endforeach()
 set(BUILD_LIST "core,imgproc,imgcodecs,features2d,calib3d,flann" CACHE STRING "" FORCE)
 set(BUILD_SHARED_LIBS OFF CACHE BOOL "" FORCE)
 
+# Python extensions (and most host toolchains) use the dynamic CRT (/MD). OpenCV's
+# default static CRT (/MT) on MSVC then fails with LNK2038 at link time.
+if(MSVC AND NOT SEMPER_ANDROID)
+    set(BUILD_WITH_STATIC_CRT OFF CACHE BOOL "" FORCE)
+endif()
+
 set(WITH_PNG  ON CACHE BOOL "" FORCE)
 set(WITH_JPEG ON CACHE BOOL "" FORCE)
 set(WITH_TIFF ON CACHE BOOL "" FORCE)

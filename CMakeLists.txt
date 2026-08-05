@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 3.22)
 # Version tracks include/semper/version.hpp (keep the two in sync).
 # C is required: vendored OpenCV and the C ABI smoke binary compile C sources.
-project(semper VERSION 0.1.4 LANGUAGES C CXX)
+project(semper VERSION 0.1.5 LANGUAGES C CXX)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -114,12 +114,19 @@ if(NOT MSVC)
     # Apply aggressive flags only to our TUs, not OpenCV (added after add_subdirectory).
     # -flto is Android-only: MinGW host shared libs (semper_c) fail at runtime with
     # "32 bit pseudo relocation ... out of range" when the static archive was LTO-built.
-    set(_semper_pipeline_opts -O3 -ffast-math -fopenmp -fPIC -fvisibility=hidden -fexceptions -Wall -Wextra)
+    set(_semper_pipeline_opts -O3 -ffast-math -fPIC -fvisibility=hidden -fexceptions -Wall -Wextra)
     if(SEMPER_ANDROID)
-        list(APPEND _semper_pipeline_opts -flto)
+        list(APPEND _semper_pipeline_opts -flto -fopenmp)
+        target_compile_options(semper_pipeline PRIVATE ${_semper_pipeline_opts})
+        target_link_options(semper_pipeline PUBLIC -fopenmp)
+    else()
+        # Apple Clang rejects bare -fopenmp; use CMake's OpenMP package when present.
+        find_package(OpenMP)
+        target_compile_options(semper_pipeline PRIVATE ${_semper_pipeline_opts})
+        if(OpenMP_CXX_FOUND)
+            target_link_libraries(semper_pipeline PUBLIC OpenMP::OpenMP_CXX)
+        endif()
     endif()
-    target_compile_options(semper_pipeline PRIVATE ${_semper_pipeline_opts})
-    target_link_options(semper_pipeline PUBLIC -fopenmp)
 endif()
 if(SEMPER_SANITIZER AND NOT MSVC)
     # Sanitizers and -flto fight; drop LTO when instrumenting.

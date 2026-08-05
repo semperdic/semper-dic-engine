@@ -21,15 +21,15 @@ struct semper_engine {
 
 extern "C" {
 
-semper_engine* semper_create(void) {
+SEMPER_C_API semper_engine* semper_create(void) {
     return new (std::nothrow) semper_engine();
 }
 
-void semper_destroy(semper_engine* eng) {
+SEMPER_C_API void semper_destroy(semper_engine* eng) {
     delete eng;
 }
 
-int semper_set_reference(semper_engine* eng,
+SEMPER_C_API int semper_set_reference(semper_engine* eng,
                          const uint8_t* img, size_t img_len,
                          const uint8_t* mask, size_t mask_len,
                          int expected_w, int expected_h) {
@@ -44,7 +44,7 @@ int semper_set_reference(semper_engine* eng,
     return 0;
 }
 
-int semper_run(semper_engine* eng,
+SEMPER_C_API int semper_run(semper_engine* eng,
                const uint8_t* def, size_t def_len,
                const uint8_t* mask, size_t mask_len,
                const semper_params* params,
@@ -81,11 +81,11 @@ int semper_run(semper_engine* eng,
         metrics, metrics_len, eng->cancel, progress);
 }
 
-void semper_cancel(semper_engine* eng) {
+SEMPER_C_API void semper_cancel(semper_engine* eng) {
     if (eng != nullptr) eng->cancel.request();
 }
 
-const char* semper_version(void) {
+SEMPER_C_API const char* semper_version(void) {
     return SEMPER_VERSION_STRING;
 }
 
