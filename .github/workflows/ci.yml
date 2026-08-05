@@ -1,34 +1,134 @@
 name: ci
 
+# Engine correctness lives here (semperdic/semper-dic-engine), not in the
+# private Android app. App CI only builds/links the pinned submodule.
+
 on:
   push:
     branches: [main]
   pull_request:
     branches: [main]
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
+  # ===================================================================
+  # Host suite — math + DICe + full-field contracts (system OpenCV)
+  # ===================================================================
   host-tests:
+    name: Host tests
     runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      CCACHE_DIR: ${{ github.workspace }}/.ccache
+      CCACHE_MAXSIZE: 500M
+      CCACHE_COMPILERCHECK: content
     steps:
       - uses: actions/checkout@v4
         with:
           submodules: recursive
 
-      - name: Sparse OpenCV checkout
-        run: bash scripts/sparse-opencv.sh
+      - name: Cache OpenCV packages
+        uses: actions/cache@v4
+        with:
+          path: ~/apt-cache
+          key: apt-libopencv-dev-${{ runner.os }}-v1
 
-      - name: Configure host tests
+      - name: Install OpenCV + ccache
         run: |
-          cmake -S tests -B build/tests -DCMAKE_BUILD_TYPE=Release
+          mkdir -p ~/apt-cache/partial
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq --no-install-recommends \
+            -o Dir::Cache::archives="$HOME/apt-cache" libopencv-dev ccache
+          sudo chown -R "$(id -u):$(id -g)" ~/apt-cache
+
+      - name: Cache ccache objects
+        uses: actions/cache@v4
+        with:
+          path: ${{ github.workspace }}/.ccache
+          key: ccache-host-tests-${{ github.sha }}
+          restore-keys: ccache-host-tests-
+
+      - name: Configure
+        run: >
+          cmake -S tests -B build/tests
+          -DCMAKE_BUILD_TYPE=Release
+          -DDIC_REQUIRE_OPENCV=ON
+          -DSEMPER_WERROR=ON
+          -DCMAKE_C_COMPILER_LAUNCHER=ccache
+          -DCMAKE_CXX_COMPILER_LAUNCHER=ccache
 
       - name: Build
-        run: cmake --build build/tests -j$(nproc)
+        run: cmake --build build/tests -j"$(nproc)"
 
       - name: Run dic_tests
         run: ./build/tests/dic_tests
 
-  c-sdk-smoke:
+      - name: ccache statistics
+        if: always()
+        run: ccache --show-stats
+
+  # ===================================================================
+  # Sanitizers — ASan+UBSan and TSan on every change
+  # ===================================================================
+  sanitizers:
+    name: Sanitized (${{ matrix.id }})
     runs-on: ubuntu-latest
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - sanitizer: "address,undefined"
+            id: asan-ubsan
+          - sanitizer: "thread"
+            id: tsan
+    env:
+      CCACHE_DIR: ${{ github.workspace }}/.ccache
+      CCACHE_MAXSIZE: 500M
+      CCACHE_COMPILERCHECK: content
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Install ccache
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq ccache
+
+      - name: Cache ccache objects
+        uses: actions/cache@v4
+        with:
+          path: ${{ github.workspace }}/.ccache
+          key: ccache-san-${{ matrix.id }}-${{ github.sha }}
+          restore-keys: ccache-san-${{ matrix.id }}-
+
+      - name: Configure
+        run: >
+          cmake -S tests -B build/tests
+          -DCMAKE_BUILD_TYPE=Release
+          -DDIC_SANITIZER=${{ matrix.sanitizer }}
+          -DCMAKE_C_COMPILER_LAUNCHER=ccache
+          -DCMAKE_CXX_COMPILER_LAUNCHER=ccache
+
+      - name: Build
+        run: cmake --build build/tests -j"$(nproc)"
+
+      - name: Run dic_tests
+        run: ./build/tests/dic_tests
+
+      - name: ccache statistics
+        if: always()
+        run: ccache --show-stats
+
+  # ===================================================================
+  # C ABI smoke — vendored OpenCV, libsemper_c
+  # ===================================================================
+  c-sdk-smoke:
+    name: C SDK smoke
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
     steps:
       - uses: actions/checkout@v4
         with:
@@ -46,10 +146,16 @@ jobs:
             -DSEMPER_ANDROID=OFF
 
       - name: Build semper_c + smoke
-        run: cmake --build build/sdk --target semper_c semper_c_smoke -j$(nproc)
+        run: cmake --build build/sdk --target semper_c semper_c_smoke -j"$(nproc)"
 
       - name: Run C smoke
         run: |
           SMOKE=$(find build/sdk -name semper_c_smoke -type f | head -n1)
           test -n "$SMOKE"
+          # Shared lib lives next to the adapter build tree on Linux.
+          export LD_LIBRARY_PATH="$(dirname "$SMOKE"):$(dirname "$SMOKE")/../adapters/c:${LD_LIBRARY_PATH:-}"
+          # Also search common CMake output dirs.
+          for d in build/sdk/adapters/c build/sdk/lib build/sdk/bin; do
+            [ -d "$d" ] && export LD_LIBRARY_PATH="$(pwd)/$d:$LD_LIBRARY_PATH"
+          done
           "$SMOKE"

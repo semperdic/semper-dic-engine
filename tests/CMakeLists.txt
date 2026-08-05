@@ -4,10 +4,10 @@
 # Builds the portable DIC math library against the micro test framework.
 # No Android NDK required.
 #
-# From the repo root:
-#   cmake -S native/tests -B build/native-tests -DCMAKE_BUILD_TYPE=Release
-#   cmake --build build/native-tests
-#   ./build/native-tests/dic_tests
+# From the engine repo root (semperdic/semper-dic-engine):
+#   cmake -S tests -B build/tests -DCMAKE_BUILD_TYPE=Release
+#   cmake --build build/tests
+#   ./build/tests/dic_tests
 # =====================================================================
 cmake_minimum_required(VERSION 3.16)
 project(semper_tests CXX)

@@ -1,10 +1,16 @@
 # Host-side native test suite
 
+Runs in this repository (`semperdic/semper-dic-engine`). The private Android
+app consumes a pinned submodule and does **not** re-run these host tiers.
+
 ```bash
-# From repo root
-cmake -S native/tests -B build/native-tests -DCMAKE_BUILD_TYPE=Release
-cmake --build build/native-tests
-./build/native-tests/dic_tests
+# From the engine repo root
+git submodule update --init --recursive
+cmake -S tests -B build/tests -DCMAKE_BUILD_TYPE=Release -DDIC_REQUIRE_OPENCV=ON
+cmake --build build/tests
+./build/tests/dic_tests
 ```
 
-See [docs/engine/TESTING.md](../../docs/engine/TESTING.md) for the catalog.
+CI: `.github/workflows/ci.yml` (host tests, sanitizers, C SDK smoke).
+
+See [docs/TESTING.md](../docs/TESTING.md) for the catalog.

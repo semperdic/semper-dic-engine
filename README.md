@@ -17,7 +17,7 @@ secrets. Downstream apps link it as a git submodule (or via `find_package(Semper
 ├── bindings/python/      # pybind11 + scikit-build-core
 ├── cmake/                # options, OpenCV helpers, package config
 ├── tests/                # host suite (no NDK) + C smoke
-├── docs/CONTRACT.md      # Frozen / Stable API contract
+├── docs/                 # CONTRACT, ARCHITECTURE, MATHEMATICS, TESTING
 └── third_party/{eigen,opencv}
 ```
 
@@ -25,11 +25,15 @@ secrets. Downstream apps link it as a git submodule (or via `find_package(Semper
 
 ### Host tests
 
+Host correctness (+ sanitizers + C SDK smoke) runs in this repo's GitHub Actions
+(`.github/workflows/ci.yml`). Locally:
+
 ```bash
 git submodule update --init --recursive
-./scripts/sparse-opencv.sh          # or scripts/sparse-opencv.ps1 on Windows
+# Host suite uses system OpenCV (apt/brew); C SDK builds vendored OpenCV:
+#   ./scripts/sparse-opencv.sh   # or scripts/sparse-opencv.ps1 on Windows
 
-cmake -S tests -B build/tests -DCMAKE_BUILD_TYPE=Release
+cmake -S tests -B build/tests -DCMAKE_BUILD_TYPE=Release -DDIC_REQUIRE_OPENCV=ON
 cmake --build build/tests
 ./build/tests/dic_tests
 ```
@@ -79,11 +83,19 @@ Configure with `-DSEMPER_ANDROID=ON`. The shared library `OUTPUT_NAME` is
 | `SEMPER_BUILD_PYTHON` | OFF | Build pybind11 module |
 | `SEMPER_BUILD_TESTS` | OFF | Build `dic_tests` via parent project |
 
-## API contract
+## Documentation
 
-See [docs/CONTRACT.md](docs/CONTRACT.md). Output packing (**8 floats/point**),
-metrics layout (**17 floats**), and return codes are **Frozen**. Touching
-`include/semper/*` requires stating the semver tier in the PR.
+| Doc | Contents |
+|---|---|
+| [docs/CONTRACT.md](docs/CONTRACT.md) | Frozen / Stable API surface (semver tiers) |
+| [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | Module map, data flow, dependencies |
+| [docs/MATHEMATICS.md](docs/MATHEMATICS.md) | Formal DIC / ICGN / strain derivations |
+| [docs/TESTING.md](docs/TESTING.md) | Host / C / Python test catalog |
+| [docs/PERF_BASELINE_bd44af0.md](docs/PERF_BASELINE_bd44af0.md) | Non-regression speed/quality floor |
+
+Output packing (**8 floats/point**), metrics layout (**17 floats**), and return
+codes are **Frozen**. Touching `include/semper/*` requires stating the semver
+tier in the PR.
 
 ## License
 
