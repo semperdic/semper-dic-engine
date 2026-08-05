@@ -1,6 +1,7 @@
 cmake_minimum_required(VERSION 3.22)
 # Version tracks include/semper/version.hpp (keep the two in sync).
-project(semper VERSION 0.1.0 LANGUAGES CXX)
+# C is required: vendored OpenCV and the C ABI smoke binary compile C sources.
+project(semper VERSION 0.1.0 LANGUAGES C CXX)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
