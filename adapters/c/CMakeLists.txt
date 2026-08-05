@@ -18,10 +18,8 @@ set_target_properties(semper_c PROPERTIES
 )
 
 if(NOT MSVC)
-    # Match semper_pipeline's -flto: MinGW cannot link LTO objects into a shared
-    # lib unless the final link also runs the LTO plugin.
-    target_compile_options(semper_c PRIVATE -O3 -fPIC -fvisibility=hidden -flto)
-    target_link_options(semper_c PRIVATE -flto -fopenmp)
+    target_compile_options(semper_c PRIVATE -O3 -fPIC -fvisibility=hidden)
+    target_link_options(semper_c PRIVATE -fopenmp)
 endif()
 
 # ---------------------------------------------------------------------------
@@ -69,6 +67,6 @@ if(EXISTS "${SEMPER_ROOT}/tests/c/smoke.c")
     # smoke.c is C; link the C++ runtime pulled in by semper_c.
     set_target_properties(semper_c_smoke PROPERTIES LINKER_LANGUAGE CXX)
     if(NOT MSVC)
-        target_link_options(semper_c_smoke PRIVATE -flto -fopenmp)
+        target_link_options(semper_c_smoke PRIVATE -fopenmp)
     endif()
 endif()

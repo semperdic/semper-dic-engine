@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 3.22)
 # Version tracks include/semper/version.hpp (keep the two in sync).
 # C is required: vendored OpenCV and the C ABI smoke binary compile C sources.
-project(semper VERSION 0.1.2 LANGUAGES C CXX)
+project(semper VERSION 0.1.3 LANGUAGES C CXX)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -112,7 +112,13 @@ target_compile_definitions(semper_pipeline PRIVATE
 )
 if(NOT MSVC)
     # Apply aggressive flags only to our TUs, not OpenCV (added after add_subdirectory).
-    target_compile_options(semper_pipeline PRIVATE -O3 -flto -ffast-math -fopenmp -fPIC -fvisibility=hidden -fexceptions -Wall -Wextra)
+    # -flto is Android-only: MinGW host shared libs (semper_c) fail at runtime with
+    # "32 bit pseudo relocation ... out of range" when the static archive was LTO-built.
+    set(_semper_pipeline_opts -O3 -ffast-math -fopenmp -fPIC -fvisibility=hidden -fexceptions -Wall -Wextra)
+    if(SEMPER_ANDROID)
+        list(APPEND _semper_pipeline_opts -flto)
+    endif()
+    target_compile_options(semper_pipeline PRIVATE ${_semper_pipeline_opts})
     target_link_options(semper_pipeline PUBLIC -fopenmp)
 endif()
 if(SEMPER_SANITIZER AND NOT MSVC)
