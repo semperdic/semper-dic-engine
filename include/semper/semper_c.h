@@ -20,6 +20,17 @@
 #include <stddef.h>
 #include <stdint.h>
 
+/* Default-visibility exports — adapters/c builds with -fvisibility=hidden. */
+#if defined(_WIN32) || defined(__CYGWIN__)
+#  if defined(SEMPER_C_BUILD)
+#    define SEMPER_C_API __declspec(dllexport)
+#  else
+#    define SEMPER_C_API __declspec(dllimport)
+#  endif
+#else
+#  define SEMPER_C_API __attribute__((visibility("default")))
+#endif
+
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -51,8 +62,8 @@ typedef void (*semper_progress_cb)(int percentage, void* user);
 #define SEMPER_METRICS_LEN 17
 
 /* Create / destroy an engine instance. Returns NULL on allocation failure. */
-semper_engine* semper_create(void);
-void           semper_destroy(semper_engine* eng);
+SEMPER_C_API semper_engine* semper_create(void);
+SEMPER_C_API void           semper_destroy(semper_engine* eng);
 
 /*
  * Cache the reference image (call once before a batch of runs against it).
@@ -60,7 +71,7 @@ void           semper_destroy(semper_engine* eng);
  * raw RGBA/ALPHA_8 buffer. `mask`/`mask_len` may be NULL/0 for no ROI mask.
  * Returns 0 on success, SEMPER_ERR_INIT on decode failure.
  */
-int semper_set_reference(semper_engine* eng,
+SEMPER_C_API int semper_set_reference(semper_engine* eng,
                          const uint8_t* img, size_t img_len,
                          const uint8_t* mask, size_t mask_len,
                          int expected_w, int expected_h);
@@ -72,7 +83,7 @@ int semper_set_reference(semper_engine* eng,
  * `cb` (may be NULL) is invoked with progress on the calling thread.
  * Returns the point count (>= 0) or a SEMPER_ERR_* code.
  */
-int semper_run(semper_engine* eng,
+SEMPER_C_API int semper_run(semper_engine* eng,
                const uint8_t* def, size_t def_len,
                const uint8_t* mask, size_t mask_len,
                const semper_params* params,
@@ -81,10 +92,10 @@ int semper_run(semper_engine* eng,
                semper_progress_cb cb, void* user);
 
 /* Request cancellation of the run in flight on `eng`. Thread-safe. */
-void semper_cancel(semper_engine* eng);
+SEMPER_C_API void semper_cancel(semper_engine* eng);
 
 /* Semantic version string, e.g. "0.1.0". Never NULL. */
-const char* semper_version(void);
+SEMPER_C_API const char* semper_version(void);
 
 #ifdef __cplusplus
 } /* extern "C" */

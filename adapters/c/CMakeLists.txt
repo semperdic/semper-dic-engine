@@ -2,6 +2,9 @@
 # SEMPER_BUILD_C_SDK=ON. Wraps the C++ core (semper_pipeline); no algorithm here.
 add_library(semper_c SHARED semper_c.cpp)
 
+# Tell semper_c.h to dllexport (Windows) while building the shared library.
+target_compile_definitions(semper_c PRIVATE SEMPER_C_BUILD=1)
+
 target_link_libraries(semper_c PRIVATE semper_pipeline)
 
 target_include_directories(semper_c PUBLIC
