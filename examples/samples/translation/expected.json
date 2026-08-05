@@ -1,0 +1,32 @@
+{
+  "name": "DICe custom_app translation",
+  "source": "DICe tests/examples/custom_app (ref.tif / def.tif)",
+  "license": "../LICENSE.DICe",
+  "image_size": [512, 512],
+  "truth": {
+    "u_px": 0.4,
+    "v_px": 0.4,
+    "note": "DICe publishes |U-0.4|<=0.1 at four subsets. The deformed image is a diagonal ~0.4 px shift; V is recovered similarly but DICe only asserts U."
+  },
+  "subset_contract": {
+    "verified_by": "tests/dice/test_translation_real_image.cpp",
+    "subset_size": 27,
+    "points": [[100, 100], [200, 200], [300, 300], [400, 400]],
+    "u_true": 0.4,
+    "tol_px": 0.1
+  },
+  "demos": {
+    "cpp_subset": {
+      "run": "examples/cpp/run_translation",
+      "asserts": "4/4 subsets |u-0.4|<=0.1 (same as DiceTranslationReal)"
+    },
+    "python_full_field": {
+      "run": "examples/python/run_translation.py",
+      "note": "Loads the TIFFs via Engine; quality filter may keep 0 points on this sub-pixel pair — use C++ demo or dic_tests for the strict golden"
+    },
+    "python_synthetic": {
+      "run": "examples/python/run_synthetic.py",
+      "asserts": "median u ≈ +3 px on a synthetic roll"
+    }
+  }
+}

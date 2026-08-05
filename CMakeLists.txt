@@ -147,6 +147,9 @@ endif()
 if(SEMPER_BUILD_PYTHON)
     add_subdirectory(bindings/python)
 endif()
+if(SEMPER_BUILD_EXAMPLES)
+    add_subdirectory(examples/cpp)
+endif()
 
 # ---------------------------------------------------------------------------
 # Android shared library (keeps OUTPUT_NAME semper_core for System.loadLibrary)

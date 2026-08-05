@@ -2,6 +2,7 @@ option(SEMPER_ANDROID "Build Android shared library (JNI adapter)" OFF)
 option(SEMPER_BUILD_TESTS "Build host-side dic_tests" OFF)
 option(SEMPER_BUILD_C_SDK "Build the stable C ABI shared library (semper_c)" OFF)
 option(SEMPER_BUILD_PYTHON "Build the pybind11 Python extension" OFF)
+option(SEMPER_BUILD_EXAMPLES "Build beginner C++ examples (links semper_pipeline)" OFF)
 option(SEMPER_FORCE_RELEASE "Force Release flags even when AGP passes Debug" ON)
 
 # Optional sanitizers for first-party native libs (math/pipeline). OFF by default

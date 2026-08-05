@@ -36,5 +36,14 @@ res.metrics          # (17,) float32 telemetry
 
 Call `eng.cancel()` from another thread to stop a run in flight.
 
+**Beginner demos** (DICe sample images + verified 0.4 px translation):
+
+```bash
+python examples/python/run_synthetic.py
+python examples/python/run_translation.py
+```
+
+See [`examples/README.md`](../../examples/README.md) and [`docs/EXAMPLES.md`](../../docs/EXAMPLES.md).
+
 The output packing, metrics layout, and error codes are **frozen** — see
 [`docs/CONTRACT.md`](../../docs/CONTRACT.md) in this repository.

@@ -32,6 +32,19 @@ Eigen (`third_party/eigen`) and OpenCV's universal-intrinsics headers
 `tests/shim/opencv2/` so the host build needs no OpenCV configure.
 Logging uses portable `src/util/log.hpp` (stderr on host; Android log on device).
 
+### Beginner examples (sample images + verified results)
+
+See [EXAMPLES.md](EXAMPLES.md) and [`examples/README.md`](../examples/README.md).
+The C++ translation demo mirrors `DiceTranslationReal` on DICe `ref.tif`/`def.tif`.
+
+```bash
+cmake -S . -B build/sdk -DSEMPER_BUILD_EXAMPLES=ON
+cmake --build build/sdk --target run_translation
+./build/sdk/examples/cpp/run_translation \
+  examples/samples/translation/ref.tif \
+  examples/samples/translation/def.tif
+```
+
 ### C ABI smoke
 
 ```bash
