@@ -49,5 +49,64 @@ def test_recovers_rigid_translation():
 
 def test_missing_reference_errors():
     eng = semper.Engine()
-    with pytest.raises(semper.DicError):
+    with pytest.raises(semper.DicError) as excinfo:
         eng.run(_speckle(), rect=(0, 0, 128, 128), step=20, subset=31, strain_window=5)
+    # Tighten: the code must be the documented INIT sentinel, not just "some error".
+    assert excinfo.value.code == semper.ERR_INIT
+
+
+def test_degenerate_roi_raises_with_roi_code():
+    ref = _speckle()
+    eng = semper.Engine()
+    eng.set_reference(ref)
+    # rect_w < step ⇒ empty grid ⇒ ROI error.
+    with pytest.raises(semper.DicError) as excinfo:
+        eng.run(ref, rect=(0, 0, 10, 10), step=20, subset=31, strain_window=5)
+    assert excinfo.value.code == semper.ERR_ROI
+
+
+def test_degenerate_roi_no_raise_returns_negative_result():
+    ref = _speckle()
+    eng = semper.Engine()
+    eng.set_reference(ref)
+    res = eng.run(
+        ref, rect=(0, 0, 10, 10), step=20, subset=31, strain_window=5,
+        raise_on_error=False,
+    )
+    # code < 0 branch in __init__.py: count carries the code, points is empty,
+    # metrics is still the full (17,) array.
+    assert res.count == semper.ERR_ROI
+    assert res.points.shape == (0, 8)
+    assert res.metrics.shape == (17,)
+
+
+def test_set_reference_rejects_non_2d():
+    eng = semper.Engine()
+    rgb = np.zeros((16, 16, 3), np.uint8)  # 3-D → not a grayscale image
+    with pytest.raises(ValueError):
+        eng.set_reference(rgb)
+
+
+def test_set_reference_float_array_is_cast_not_rejected():
+    # to_gray uses pybind11 forcecast, so a float64 array is silently narrowed to
+    # uint8 rather than rejected — the "must be uint8" message is NOT enforced.
+    # Pin this surprising-but-real behavior so a future change is a conscious one.
+    eng = semper.Engine()
+    ref_f64 = _speckle().astype(np.float64)
+    eng.set_reference(ref_f64)  # must NOT raise
+    res = eng.run(
+        ref_f64, rect=(0, 0, 128, 128), step=20, subset=31, strain_window=5,
+        raise_on_error=False,
+    )
+    assert res.metrics.shape == (17,)
+
+
+def test_error_codes_and_messages():
+    assert semper.ERR_ROI == -2
+    assert semper.ERR_INIT == -3
+    assert semper.ERR_CANCELLED == -99
+    # DicError carries the code and maps to the documented human message.
+    err = semper.DicError(semper.ERR_ROI)
+    assert err.code == semper.ERR_ROI
+    assert "ROI" in str(err)
+    assert semper.DicError(semper.ERR_INIT).code == semper.ERR_INIT

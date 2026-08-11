@@ -126,6 +126,72 @@ TEST_CASE(FullField, UndersizedBuffer_TruncatesWithoutOverflow) {
     CHECK(n <= 4);
 }
 
+TEST_CASE(FullField, MetricsLayout_Contract) {
+    // The 17-float metrics array is Frozen (docs/CONTRACT.md §A.4) but only
+    // metrics[0] was ever checked. Pin the slot invariants a downstream telemetry
+    // reader relies on. Runs a real solve on the 256x256 speckle pair.
+    cv::Mat ref_gray, def_gray;
+    make_pair(ref_gray, def_gray);
+    ReferenceCache cache;
+    cache.set_from_gray(ref_gray, cv::Mat());
+
+    const int cap = 8 * ((W / STEP) * (H / STEP) + 8);
+    std::vector<float> out(cap, 0.f);
+    float metrics[17];
+    for (int i = 0; i < 17; ++i) metrics[i] = -12345.f;
+
+    const int n = run_full_field(cache, def_gray, cv::Mat(), params_for(W, H),
+                                 out.data(), cap, metrics, 17, nullptr);
+    REQUIRE(n >= 0);
+
+    // Counts: attempted >= solved >= 0, rejected is the exact complement.
+    CHECK(metrics[0] >= metrics[1]);            // attempted >= solved
+    CHECK(metrics[1] >= 0.f);                   // solved >= 0
+    CHECK(metrics[2] == metrics[0] - metrics[1]); // rejected identity
+    // Convergence % is a bounded ratio.
+    CHECK(metrics[15] >= 0.f);
+    CHECK(metrics[15] <= 100.f);
+    // Seed-quality flag is one of the three documented values.
+    CHECK((metrics[16] == 0.f || metrics[16] == 1.f || metrics[16] == 2.f));
+}
+
+TEST_CASE(FullField, MetricsLen16_LeavesSlot16Untouched) {
+    // metrics_len == 16 is the documented minimum; the writer must fill 0..15 and
+    // never touch slot 16 (that would be a write past a 16-float caller buffer).
+    cv::Mat ref_gray, def_gray;
+    make_pair(ref_gray, def_gray);
+    ReferenceCache cache;
+    cache.set_from_gray(ref_gray, cv::Mat());
+
+    const int cap = 8 * ((W / STEP) * (H / STEP) + 8);
+    std::vector<float> out(cap, 0.f);
+    const float S = -98765.f;   // "not written" sentinel
+    float metrics[17];
+    for (int i = 0; i < 17; ++i) metrics[i] = S;
+
+    const int n = run_full_field(cache, def_gray, cv::Mat(), params_for(W, H),
+                                 out.data(), cap, metrics, 16, nullptr);
+    REQUIRE(n >= 0);
+    CHECK(metrics[0] != S);     // slot 0 written
+    CHECK(metrics[15] != S);    // slot 15 written
+    CHECK(metrics[16] == S);    // slot 16 must stay the sentinel
+}
+
+TEST_CASE(FullField, NullMetrics_DoesNotCrash) {
+    // metrics == nullptr is legal (the writer guards on it); the solve must still
+    // run and return a valid point count.
+    cv::Mat ref_gray, def_gray;
+    make_pair(ref_gray, def_gray);
+    ReferenceCache cache;
+    cache.set_from_gray(ref_gray, cv::Mat());
+
+    const int cap = 8 * ((W / STEP) * (H / STEP) + 8);
+    std::vector<float> out(cap, 0.f);
+    const int n = run_full_field(cache, def_gray, cv::Mat(), params_for(W, H),
+                                 out.data(), cap, nullptr, 17, nullptr);
+    CHECK(n >= 0);
+}
+
 #else
 
 TEST_CASE(FullField, OpenCvRequired_SkippedWithoutOpenCV) {

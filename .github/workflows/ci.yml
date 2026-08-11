@@ -186,3 +186,49 @@ jobs:
             echo "version per docs/CONTRACT.md §A.1."
             exit 1
           fi
+
+  # ===================================================================
+  # Coverage — report-only, no gate (SEMPER_COVERAGE). Surfaces which src/
+  # files the host suite exercises so future boundary gaps are visible.
+  # ===================================================================
+  coverage:
+    name: Coverage (report-only)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Install OpenCV + gcovr
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq --no-install-recommends libopencv-dev gcovr
+
+      - name: Configure (coverage)
+        run: >
+          cmake -S tests -B build/cov
+          -DCMAKE_BUILD_TYPE=Debug
+          -DSEMPER_COVERAGE=ON
+          -DDIC_REQUIRE_OPENCV=ON
+
+      - name: Build
+        run: cmake --build build/cov -j"$(nproc)"
+
+      - name: Run dic_tests
+        run: ./build/cov/dic_tests
+
+      - name: gcovr report (src/ only)
+        run: |
+          # Report-only: no --fail-under, no threshold. Text summary to the log,
+          # machine-readable XML as an artifact.
+          gcovr --root . build/cov --filter 'src/' --print-summary --xml-pretty -o coverage.xml
+          echo "----- src/ line coverage -----"
+          gcovr --root . build/cov --filter 'src/' --txt
+
+      - name: Upload coverage.xml
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-xml
+          path: coverage.xml

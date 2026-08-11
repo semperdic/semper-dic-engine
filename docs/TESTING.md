@@ -252,6 +252,90 @@ pinned here is the contract those polls rest on.
 `cancel.cpp` is deliberately its own translation unit with no OpenCV in it, so
 the host suite can link it without the rest of the pipeline.
 
+## Suite: `ImageCodec` — `unit/test_image_codec.cpp`
+
+The single point where every external image (C ABI, Python, JNI) enters the
+engine: `Semper::io::decode_gray` / `decode_bgr` / `image_dimensions`
+(`src/io/image_codec.cpp`). Before this suite the file was in **no** test target,
+so a pixel-corrupting decode bug was invisible to the whole pipeline. OpenCV-gated
+(needs `imgcodecs`/`imgproc`), so it lives in `DIC_PIPELINE_TESTS`.
+
+| Test | Proves | Failure would mean |
+|---|---|---|
+| `RawRgba_MatchesOpenCvGray` | `len == w*h*4` path decodes to `w×h` gray matching OpenCV's `RGBA2GRAY` on spot pixels | Wrong raw stride/channel order — every RGBA frame silently corrupted |
+| `RawGray_IsExactClone` | `len == w*h` path returns a byte-identical, independent clone | Raw grayscale mangled, or an alias of the caller's buffer (use-after-free) |
+| `EncodedPng_RoundTripsExactly` | Encoded PNG decodes losslessly to the original | Encoded-image decode regressed |
+| `EncodedColor_ConvertsToGray` | Encoded 3-channel image collapses to one channel | Colour images enter the solver as multi-channel garbage |
+| `EncodedNon8U_ConvertsTo8U` | 16-bit PNG is converted to `CV_8U` | Non-8U depth reaches the solver, which assumes 8-bit |
+| `MismatchedLength_FallsThroughToEncoded` | `expected_w/h` set but `len` matching neither raw size → encoded path | A wrong-length raw buffer is misread as raw instead of decoded |
+| `NullAndEmpty_ReturnEmpty` | `nullptr` / `len == 0` → empty `cv::Mat`, no crash | Null-deref on a bad caller argument |
+| `GarbageBytes_ReturnEmptyNoCrash` | Undecodable bytes → empty, no crash | Decoder trusts attacker-controlled bytes |
+| `ImageDimensions_EncodedBuffer` | Correct w/h from an encoded buffer | Dimension probe wrong — downstream allocations mis-sized |
+| `ImageDimensions_ZerosOnFailureAndNull` | Zeros on undecodable/null input | Garbage dimensions treated as valid |
+| `ImageDimensions_RawBufferYieldsZeros_KnownTrap` | Documents that `image_dimensions` has **no** raw-buffer awareness (raw blob → 0×0) | (Pins a known limitation, not a bug — see Known limitations) |
+
+## Suite: `ReferenceCache` — `integration/test_reference_cache.cpp`
+
+Direct characterization of the ROI-mask **"Ghost Wall"** sterilization and the
+cache lifecycle in `src/pipeline/reference_cache.cpp`, previously only exercised
+incidentally. Masked pixels are overwritten with the `-10.0f` sentinel so the
+solver skips them. OpenCV-gated.
+
+| Test | Proves | Failure would mean |
+|---|---|---|
+| `RoiSterilization_MasksLeftHalf` | Masked pixels become exactly `-10.0f`; unmasked stay real | ROI mask ignored, or the wrong region sterilized — masked material enters the solve |
+| `MaskResize_NearestKeepsHalfSplit` | A differently-sized mask is `INTER_NEAREST`-resized to the reference before sterilizing | Mask/reference misalignment silently masks the wrong pixels |
+| `NoMask_LeavesAllPixelsReal` | Empty mask → no sentinels written | Phantom masking with no ROI supplied |
+| `Relifecycle_UpdatesDimsAndClearsAkaze` | Re-`set_from_gray` with a new size updates dims and clears AKAZE state (`akaze_scale == 0.25`) | Stale seeding/dimension state leaks across references |
+| `EmptyInput_LeavesCacheCleared` | Empty gray clears the cache (`width == 0`, `ref_img == nullptr`) instead of retaining the old reference | A failed re-init silently solves against the previous frame |
+| `Reset_ClearsEverything` | `reset()` frees and zeroes all state | Double-free or leak on teardown |
+
+Compile-time `static_assert`s pin `ReferenceCache` as non-copyable/non-movable
+(§A.2 of the contract) regardless of OpenCV.
+
+## Suite: `FullField` — `integration/test_full_field_contracts.cpp`
+
+Host characterization of `run_full_field` — the Frozen return codes, the
+capacity-drop rule, and the 17-float metrics layout — without depending on solve
+quality. OpenCV-gated.
+
+| Test | Proves | Failure would mean |
+|---|---|---|
+| `DegenerateRoi_ReturnsRoiError` | `rect_w < step` → `-2` | ROI validation regressed |
+| `EmptyDeformed_ReturnsInitError` | Empty deformed image → `-3` | Init-guard regressed |
+| `StaleCancelDoesNotAbortNextSolve` | A leftover cancel is cleared on entry | A prior cancel poisons the next solve |
+| `UndersizedBuffer_TruncatesWithoutOverflow` | Small `out_capacity` drops points, never overflows, returns `≤ capacity/8` | Buffer overflow on a caller-sized buffer |
+| `MetricsLayout_Contract` | attempted ≥ solved ≥ 0; `rejected == attempted − solved`; convergence % ∈ [0,100]; seed flag ∈ {0,1,2} | A downstream telemetry reader mis-parses the Frozen slots |
+| `MetricsLen16_LeavesSlot16Untouched` | `metrics_len == 16` fills 0..15 and never writes slot 16 | Write past a 16-float caller buffer |
+| `NullMetrics_DoesNotCrash` | `metrics == nullptr` is legal | Null-deref when a caller wants points only |
+
+### C ABI contract — `tests/c/contract.c` (built with `SEMPER_BUILD_C_SDK`)
+
+Where `c/smoke.c` proves the happy path runs, `c/contract.c` pins the **Frozen
+ABI surface** the private downstream app and any external C/C#/Rust caller depend
+on. It runs in the `c-sdk-smoke` CI job and returns non-zero on any breach:
+
+- Compile-time `_Static_assert` on every Frozen constant (`SEMPER_ERR_*`,
+  `SEMPER_FLOATS_PER_POINT`, `SEMPER_METRICS_LEN`) and on `sizeof`/`offsetof` of
+  all eight `semper_params` fields — a reordered field is a build failure, not a
+  silent parameter mis-read.
+- Runtime: null-argument guards → `INIT`, run-before-`set_reference` → `INIT`,
+  degenerate ROI → `ROI`, the capacity-drop rule, the `metrics_len` rule,
+  per-engine cancel independence, and the `MAJOR.MINOR.PATCH` version format.
+- **Golden symbols** (`tests/c/abi_symbols.txt`): CI diffs `nm -D` of
+  `libsemper_c.so` against the six documented exports, so an accidental export or
+  a dropped `SEMPER_C_API` annotation fails the build.
+
+## Coverage (report-only)
+
+The `coverage` CI job configures `-DSEMPER_COVERAGE=ON`, runs `dic_tests`, and
+publishes a `gcovr` report over `src/` as an artifact. **There is no threshold or
+gate** — it exists to make it visible when a source file (like `image_codec.cpp`,
+which was at ~0%) drifts out of the exercised set, not to block a PR on a number.
+Locally: `cmake -S tests -B build/cov -DSEMPER_COVERAGE=ON -DDIC_REQUIRE_OPENCV=ON
+&& cmake --build build/cov -j && ./build/cov/dic_tests && gcovr --root . build/cov
+--filter 'src/' --txt`.
+
 ## Downstream app tests (informative)
 
 Kotlin JVM unit tests, instrumented JNI smokes, and backend contract tests live
@@ -271,26 +355,34 @@ tests/
   framework/              the test harness — synthetic.h, test_framework.h
   shim/                   host stand-ins for OpenCV configs
   c/smoke.c               C ABI smoke (built with SEMPER_BUILD_C_SDK)
+  c/contract.c            C ABI Frozen-contract binary (semper_c_contract)
+  c/abi_symbols.txt       golden list of exported semper_* symbols
   unit/                   one component vs. an oracle / mathematical identity
                             test_simd_kernels, test_image,
                             test_subset_precomputer, test_strain_calculator,
-                            test_cancel_token
+                            test_cancel_token, test_image_codec (OpenCV-gated)
   integration/            the assembled engine end-to-end + robustness
-                            test_optimization_engine, test_robustness
+                            test_optimization_engine, test_robustness,
+                            test_full_field_contracts, test_reference_cache
+                            (the last two OpenCV-gated)
   dice/                   DICe golden comparisons
   perf/                   throughput gates
 ```
 
 `tests/CMakeLists.txt` lists sources under `DIC_UNIT_TESTS` /
-`DIC_INTEGRATION_TESTS` / `DIC_DICE_TESTS` / `DIC_PERF_TESTS`.
+`DIC_INTEGRATION_TESTS` / `DIC_DICE_TESTS` / `DIC_PERF_TESTS`, plus
+`DIC_PIPELINE_TESTS` for the OpenCV-gated suites (`test_full_field_contracts`,
+`test_image_codec`, `test_reference_cache`) — attached only when OpenCV is present.
 
 ## Adding a new test
 
 1. Pick the suite file, or create `unit/test_<module>.cpp` (component) or
    `integration/test_<module>.cpp` (end-to-end) and add it to the matching
-   `DIC_UNIT_TESTS` / `DIC_INTEGRATION_TESTS` list in `CMakeLists.txt`.
+   `DIC_UNIT_TESTS` / `DIC_INTEGRATION_TESTS` list in `CMakeLists.txt` — or
+   `DIC_PIPELINE_TESTS` if it needs OpenCV (imgcodecs/imgproc/features2d).
 2. `TEST_CASE(Suite, Name) { ... }` — use `CHECK`, `REQUIRE`, `CHECK_NEAR`,
-   `CHECK_REL` (see `framework/test_framework.h`).
+   `CHECK_REL` (see `framework/test_framework.h`). The runner filters by a
+   **substring** of `Suite.Name`, so `dic_tests ImageCodec` runs the whole suite.
 3. For engine tests, build ground truth with `SpeckleField` +
    `AffineDeformation` — never by resampling images, and never with warps that
    don't match the engine's shape-function convention.
@@ -315,3 +407,18 @@ reachable from this tree.
 - **Per-ABI numerical drift**: the host suite runs on x86 SSE. To compare ABIs,
   build the same suite with the NDK toolchain per-ABI and run on devices —
   tolerances are already set to absorb fast-math reassociation differences.
+- **Silent output truncation** (`FullField.UndersizedBuffer`): when `out_capacity`
+  is smaller than the solved-point count, `run_full_field` drops the overflow and
+  returns the reduced count — it does **not** signal that truncation happened. This
+  is the Frozen capacity-drop rule (docs/CONTRACT.md §A.4); changing it to an error
+  would break metrics-only (`capacity == 0`) and deliberate partial-buffer callers,
+  so it is a documented behavior, not a bug. `contract.c` pins it as-is.
+- **`metrics_len` in 1..15 writes nothing** (`FullField.MetricsLen16_...`,
+  `contract.c`): the metrics writer is gated on `metrics_len >= 16` and silently
+  writes nothing below that. All in-repo callers pass ≥ 16 (JNI self-gates at 16,
+  Python and the C ABI pass 17), so this is pinned as current behavior rather than
+  changed — the Frozen minimum is 16.
+- **`image_dimensions` has no raw-buffer awareness**
+  (`ImageCodec.ImageDimensions_RawBufferYieldsZeros_KnownTrap`): a raw RGBA/gray
+  blob is not a decodable container, so it reports 0×0. Callers holding raw buffers
+  already know the dimensions; the test pins the trap so nobody relies on it.
