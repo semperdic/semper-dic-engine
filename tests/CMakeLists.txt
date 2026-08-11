@@ -83,6 +83,7 @@ set(DIC_ENGINE_SOURCES
 # Full-field solver + seeding (OpenCV). Linked only when OpenCV is present so
 # hosts without it still build the math suite; CI sets DIC_REQUIRE_OPENCV=ON.
 set(DIC_PIPELINE_SOURCES
+        ${NATIVE_ROOT}/src/io/image_codec.cpp
         ${NATIVE_ROOT}/src/pipeline/full_field_solver.cpp
         ${NATIVE_ROOT}/src/pipeline/full_field_akaze.cpp
         ${NATIVE_ROOT}/src/pipeline/full_field_mesh.cpp
@@ -95,8 +96,14 @@ set(DIC_PIPELINE_SOURCES
         ${NATIVE_ROOT}/src/seeding/akaze_seed.cpp
 )
 
+# OpenCV-gated tests. test_image_codec / test_reference_cache exercise the image
+# boundary and ROI-mask sterilization and need imgcodecs/imgproc, so they live
+# here (attached via target_sources under _SEMPER_OPENCV_READY) rather than in the
+# always-on DIC_UNIT_TESTS / DIC_INTEGRATION_TESTS lists.
 set(DIC_PIPELINE_TESTS
         integration/test_full_field_contracts.cpp
+        unit/test_image_codec.cpp
+        integration/test_reference_cache.cpp
 )
 
 add_executable(dic_tests
