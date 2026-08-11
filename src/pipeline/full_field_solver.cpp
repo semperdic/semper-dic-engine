@@ -74,6 +74,10 @@ int run_full_field(
 
         // 🚀 PRIORITY 3: Return -3 for memory/init errors
         if (output_ptr == nullptr || cache.ref_img == nullptr || def_gray.empty()) return -3;
+        // step <= 0 would divide-by-zero at `rect_w / step` below (a SIGFPE in
+        // release builds, where the assert is compiled out). Guard it with the
+        // same -2 ROI code the degenerate-grid check already returns.
+        if (params.step <= 0) return -2;
         SEMPER_ASSERT(params.subset_size > 0);
         SEMPER_ASSERT(params.step > 0);
         SEMPER_ASSERT(output_capacity >= 0);

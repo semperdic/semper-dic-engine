@@ -70,6 +70,9 @@ int run_full_field(..., CancelToken& token, ProgressCallback on_progress = nullp
 
 - **Returns** *(Frozen)*: `>= 0` → number of valid output points. `-2` → invalid ROI.
   `-3` → init/argument failure. `-99` (`kCancelled`) → cancelled mid-solve.
+  A non-positive `params.step` is treated as an invalid ROI (`-2`) — it would
+  otherwise divide-by-zero when forming the grid. This is a clarification of the
+  existing `-2` meaning, not a new code.
 - **Writes** *(Frozen)*: at most `output_capacity` floats, **8 per point** (see
   [A.4](#a4-frozen-data-formats)). Points beyond capacity are **dropped, never
   overflow**.

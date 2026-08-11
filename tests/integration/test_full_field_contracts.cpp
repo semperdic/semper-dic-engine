@@ -90,6 +90,20 @@ TEST_CASE(FullField, DegenerateRoi_ReturnsRoiError) {
     CHECK(code == -2);
 }
 
+TEST_CASE(FullField, DegenerateStep_ReturnsRoiError) {
+    cv::Mat ref_gray, def_gray;
+    make_pair(ref_gray, def_gray);
+    ReferenceCache cache;
+    cache.set_from_gray(ref_gray, cv::Mat());
+    // step == 0 would divide-by-zero at `rect_w / step`. In a Release/NDEBUG
+    // build the SEMPER_ASSERT is compiled out, so without the guard this SIGFPEs;
+    // the guard returns the -2 ROI code instead.
+    FullFieldParams p = params_for(W, H);
+    p.step = 0;
+    const int code = call_solver(cache, def_gray, p, 8 * 4);
+    CHECK(code == -2);
+}
+
 TEST_CASE(FullField, EmptyDeformed_ReturnsInitError) {
     cv::Mat ref_gray, def_gray;
     make_pair(ref_gray, def_gray);
