@@ -9,8 +9,10 @@ the two in sync.
 
 > **The rule in one sentence:** anything marked **Frozen** or **Stable** below is
 > load-bearing for a downstream app; change it carelessly and you break a shipping
-> product whose code you can't see. The golden contract test (§A.6) is the
-> automated backstop; this document is the human one.
+> product whose code you can't see. The automated backstop is the host test suite
+> (`dic_tests`) plus the C ABI contract binary (`tests/c/contract.c`, run in the
+> `c-sdk-smoke` CI job) and its golden exported-symbol list (`tests/c/abi_symbols.txt`);
+> this document is the human one. See [§A.6](#a6-how-improvements-reach-downstream-apps).
 
 You do **not** need the app to contribute. Build and test against `tests/` as
 usual. Respect the surface described here, and declare your change's
@@ -34,6 +36,14 @@ usual. Respect the surface described here, and declare your change's
 - **patch** — Internal-only improvement (accuracy, speed, robustness) with no surface change.
 
 Downstream apps pin an **exact** engine tag and only auto-adopt minor/patch bumps.
+
+> **Build-plumbing carve-out.** Export/visibility machinery — the `SEMPER_C_API`
+> macro, `-fvisibility=hidden`, `dllexport`/`dllimport` selection — is treated as
+> build plumbing, not public surface: it changes *how* the documented symbols are
+> emitted, never *which* symbols exist or their signatures. Such changes ship as
+> **patch** (e.g. `0.1.1` → `0.1.4`, which added `SEMPER_C_API` to every entry
+> point). The golden symbol list in §A.6 is what guards the set of exported symbols
+> against accidental drift.
 
 ---
 
@@ -131,7 +141,21 @@ Empty `cv::Mat` = failure; do not switch to throwing.
 ### C ABI — `include/semper/semper_c.h` · *Stable (ABI)*
 
 `semper_create` / `destroy`, `semper_set_reference`, `semper_run`, `semper_cancel`,
-`semper_version`. Same Frozen return codes and 8-float packing.
+`semper_version`. Same Frozen return codes and 8-float packing. These six are the
+**only** exported symbols; the golden list in §A.6 fails CI if that set changes.
+
+Every entry point is annotated `SEMPER_C_API`. The shared library is built with
+`-fvisibility=hidden` (and `/W…` on MSVC), so only the annotated symbols are
+exported — a symbol that loses its annotation silently vanishes from the ABI.
+
+- **Consumers must NOT define `SEMPER_C_BUILD`.** It is set `PRIVATE` while
+  building `libsemper_c` (`adapters/c/CMakeLists.txt`) and selects `dllexport` on
+  Windows. A consumer that defines it gets `dllexport` instead of `dllimport` and
+  fails to link. Just `#include <semper/semper_c.h>` — the macro resolves to
+  `dllimport` (Windows) or default visibility (ELF/Mach-O) automatically.
+- `sizeof(semper_params)` and the offset of each of its eight fields are Frozen;
+  `tests/c/contract.c` asserts them at compile time so a struct-layout change is a
+  build failure, not a silent parameter mis-read in a downstream caller.
 
 ---
 
@@ -198,7 +222,39 @@ major**) and update this document.
 1. Land the change behind the same public signatures (or additively). Update
    `SEMPER_VERSION` per §A.1.
 2. Tag a release. Downstream apps bump their **pinned submodule tag**, review the
-   diff, and run a golden contract test through the real entry point.
+   diff, and run their own contract test through the real entry point.
 3. Ship. Source compatibility of `include/semper/*` is what matters for static
    linkers; `semper_c.h` additionally guarantees ABI stability for external
    consumers.
+
+### Consuming the C SDK
+
+Building with `-DSEMPER_BUILD_C_SDK=ON` installs a CMake package so downstreams do
+not hard-code paths:
+
+```cmake
+find_package(Semper REQUIRED)      # provides the Semper:: namespace
+target_link_libraries(my_app PRIVATE Semper::semper_c)
+```
+
+The shared library carries `VERSION = <full>` and `SOVERSION = <MAJOR>`, and the
+installed `SemperConfigVersion.cmake` is written `COMPATIBILITY SameMajorVersion`.
+Together these enforce §A.1 mechanically: a consumer that pinned `find_package(Semper 0.x)`
+will refuse to configure against a future `1.x`, and the runtime `SONAME` bump on a
+major release stops an old binary from silently loading an incompatible `.so`.
+
+### The automated backstop
+
+Two checks run in the `c-sdk-smoke` CI job and are the machine-enforced half of this
+document:
+
+- **`tests/c/contract.c`** — asserts every Frozen return code, the 8-float packing,
+  the capacity-drop rule, the metrics-length rule, `sizeof`/`offsetof` of
+  `semper_params`, and the `MAJOR.MINOR.PATCH` shape of `semper_version()`. A change
+  that breaks any of them fails the build.
+- **`tests/c/abi_symbols.txt`** — the golden list of exported symbols, diffed against
+  `nm -D` of the built `libsemper_c`. An accidental export or a dropped `SEMPER_C_API`
+  annotation fails the build.
+
+Host-side behavior (the solver itself) is covered by `dic_tests` (see
+[TESTING.md](TESTING.md)).

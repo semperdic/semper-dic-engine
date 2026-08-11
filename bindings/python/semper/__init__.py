@@ -1,7 +1,7 @@
 """Semper DIC engine — Python bindings.
 
 Thin, NumPy-native wrapper over the same C++ core the Android app links. See
-docs/engine/ENGINE_APP_CONTRACT.md for the frozen output/metrics/error contracts.
+docs/CONTRACT.md for the frozen output/metrics/error contracts.
 
 Example
 -------

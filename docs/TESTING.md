@@ -54,6 +54,14 @@ cmake --build build/sdk --target semper_c semper_c_smoke
 ./build/sdk/bin/semper_c_smoke   # path may vary by generator
 ```
 
+`smoke.c` deliberately treats **zero recovered points as a pass** — it asserts the
+C ABI *path* runs end-to-end (create → set_reference → run → non-negative return),
+not solve *quality*. The post-filter can legitimately reject every point on the
+synthetic pair depending on toolchain fast-math reassociation, so requiring `n > 0`
+here would be a flaky quality gate at the wrong layer. Solve quality is asserted by
+`dic_tests` (`DiceTranslation*`), where inputs and tolerances are controlled. Do not
+"tighten" the smoke to demand points — see commit `5aca384`.
+
 ### Python smoke
 
 ```bash
@@ -298,7 +306,9 @@ tests/
   correctness: `System.loadLibrary`, OpenMP on the Android runtime, and Kotlin
   orchestration. They do not re-assert displacement accuracy here.
 
-See [app/TESTING.md](../app/TESTING.md) for the full workflow-chunk map.
+The downstream app's own test map lives in that private repository (see
+["Downstream app tests"](#downstream-app-tests-informative) above); it is not
+reachable from this tree.
 
 ## Known limitations / future work
 

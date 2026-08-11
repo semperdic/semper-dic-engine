@@ -13,7 +13,7 @@ using Semper::pipeline::FullFieldParams;
 using Semper::pipeline::ReferenceCache;
 
 // One engine instance owns a reference cache and its own cancel token, so several
-// instances in a process cancel independently (see ENGINE_APP_CONTRACT A.2).
+// instances in a process cancel independently (see docs/CONTRACT.md §A.2).
 struct semper_engine {
     ReferenceCache cache;
     CancelToken cancel;
