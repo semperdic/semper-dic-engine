@@ -69,3 +69,16 @@ if(EXISTS "${SEMPER_ROOT}/tests/c/smoke.c")
     # smoke.c is C; link the C++ runtime pulled in by semper_c.
     set_target_properties(semper_c_smoke PROPERTIES LINKER_LANGUAGE CXX)
 endif()
+
+# C ABI contract binary — asserts the Frozen surface (error codes, argument
+# guards, capacity/metrics rules, semper_params layout, version format) without
+# depending on solve quality. Uses _Static_assert, so it needs C11.
+if(EXISTS "${SEMPER_ROOT}/tests/c/contract.c")
+    add_executable(semper_c_contract ${SEMPER_ROOT}/tests/c/contract.c)
+    target_link_libraries(semper_c_contract PRIVATE semper_c)
+    target_include_directories(semper_c_contract PRIVATE ${SEMPER_PUBLIC_INCLUDE})
+    set_target_properties(semper_c_contract PROPERTIES
+            LINKER_LANGUAGE CXX   # link the C++ runtime pulled in by semper_c
+            C_STANDARD 11
+            C_STANDARD_REQUIRED ON)
+endif()

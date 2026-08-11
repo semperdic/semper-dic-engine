@@ -145,8 +145,8 @@ jobs:
             -DSEMPER_BUILD_TESTS=OFF \
             -DSEMPER_ANDROID=OFF
 
-      - name: Build semper_c + smoke
-        run: cmake --build build/sdk --target semper_c semper_c_smoke -j"$(nproc)"
+      - name: Build semper_c + smoke + contract
+        run: cmake --build build/sdk --target semper_c semper_c_smoke semper_c_contract -j"$(nproc)"
 
       - name: Run C smoke
         run: |
@@ -159,3 +159,30 @@ jobs:
             [ -d "$d" ] && export LD_LIBRARY_PATH="$(pwd)/$d:$LD_LIBRARY_PATH"
           done
           "$SMOKE"
+
+      - name: Run C ABI contract
+        run: |
+          CONTRACT=$(find build/sdk -name semper_c_contract -type f | head -n1)
+          test -n "$CONTRACT"
+          export LD_LIBRARY_PATH="$(dirname "$CONTRACT"):$(dirname "$CONTRACT")/../adapters/c:${LD_LIBRARY_PATH:-}"
+          for d in build/sdk/adapters/c build/sdk/lib build/sdk/bin; do
+            [ -d "$d" ] && export LD_LIBRARY_PATH="$(pwd)/$d:$LD_LIBRARY_PATH"
+          done
+          "$CONTRACT"
+
+      - name: Check exported ABI symbols against golden list
+        run: |
+          LIB=$(find build/sdk -name 'libsemper_c.so' -type f | head -n1)
+          test -n "$LIB"
+          # The six documented entry points are the ONLY symbols that may be
+          # exported (visibility is hidden + explicit SEMPER_C_API). An accidental
+          # export, or a dropped annotation, changes this set and fails the diff.
+          nm -D --defined-only "$LIB" | awk '$2=="T"{print $3}' \
+            | grep '^semper_' | sort > /tmp/abi_symbols.actual
+          echo "Exported semper_* symbols:"; cat /tmp/abi_symbols.actual
+          if ! diff -u tests/c/abi_symbols.txt /tmp/abi_symbols.actual; then
+            echo "::error::Exported C ABI symbol set drifted from tests/c/abi_symbols.txt"
+            echo "If this change is intentional, update the golden list and bump the"
+            echo "version per docs/CONTRACT.md §A.1."
+            exit 1
+          fi
