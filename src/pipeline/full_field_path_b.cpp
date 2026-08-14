@@ -113,7 +113,15 @@ void run_path_b(
         int active = 0; bool done = false;
     } gq;
     std::atomic<int> seed_idx(0);
-    std::mutex grid_mutex;
+    // No grid_mutex: every resultGrid[y][x] write below is preceded by that
+    // cell's compare_exchange_strong on cell_claimed, so exactly one thread
+    // ever owns a given cell — a different memory location than any other
+    // thread is touching. ResultGrid is a pre-sized (never resized during
+    // this parallel phase) std::vector<std::vector<GridPoint>> of a plain POD
+    // struct, so concurrent writes to distinct elements are race-free by the
+    // standard's element-independence guarantee — no lock was ever needed
+    // here for correctness, only for the now-removed shared stat accumulation
+    // this loop used to also do.
     const int cores_to_use = safe_cores;
 
     for (const auto &s : boundary_seeds) {
@@ -242,16 +250,12 @@ void run_path_b(
 
                                     if (res.status == 0 && res.correlation_score <= tuning::kCorrAccept) {
                                         int order = ctx.compute_order_counter.fetch_add(1, std::memory_order_relaxed);
-                                        {
-                                            std::lock_guard<std::mutex> lg(grid_mutex);
-                                            // 🚀 FIX: Use res.iters at the end
-                                            resultGrid[seed.y_idx][seed.x_idx] = {(float)realX, (float)realY, res.u, res.v, res.ux, res.uy, res.vx, res.vy,
-                                                                                  res.correlation_score, true, tid, order, 0, needed_rescue, res.iters};
-                                        }
+                                        // 🚀 FIX: Use res.iters at the end
+                                        resultGrid[seed.y_idx][seed.x_idx] = {(float)realX, (float)realY, res.u, res.v, res.ux, res.uy, res.vx, res.vy,
+                                                                              res.correlation_score, true, tid, order, 0, needed_rescue, res.iters};
                                         ctx.global_points_solved.fetch_add(1, std::memory_order_relaxed); local_points_solved++;
                                         { std::lock_guard<std::mutex> lq(gq.mtx); gq.q.push(Semper::SeedNode(seed.x_idx, seed.y_idx, res.u, res.v, res.ux, res.uy, res.vx, res.vy, res.correlation_score)); gq.cv.notify_one(); }
                                     } else {
-                                        std::lock_guard<std::mutex> lg(grid_mutex);
                                         resultGrid[seed.y_idx][seed.x_idx].corr = CORR_INVALID;
                                         resultGrid[seed.y_idx][seed.x_idx].used_simplex = needed_rescue;
                                         // 🚀 FIX: Assign the real iterations
@@ -272,7 +276,7 @@ void run_path_b(
                         const int flat = ny * gridW + nx;
                         bool was_unclaimed = false;
                         if (!cell_claimed[flat].compare_exchange_strong(was_unclaimed, true, std::memory_order_acq_rel, std::memory_order_relaxed)) continue;
-                        { std::lock_guard<std::mutex> lg(grid_mutex); resultGrid[ny][nx].solved = true; }
+                        resultGrid[ny][nx].solved = true;
                         const int realX = params.rect_x + nx * params.step, realY = params.rect_y + ny * params.step;
                         auto th1 = std::chrono::high_resolution_clock::now();
                         SubsetPrecomputer::precompute_subset_fast(local_subset, *ctx.cache.ref_img, realX, realY, params.subset_size, ctx.hessian_pool[flat]);
@@ -305,17 +309,13 @@ void run_path_b(
 
                         if (res.status == 0 && res.correlation_score <= tuning::kCorrAccept) {
                             const int order = ctx.compute_order_counter.fetch_add(1, std::memory_order_relaxed);
-                            {
-                                std::lock_guard<std::mutex> lg(grid_mutex);
-                                // 🚀 FIX: Use res.iters at the end
-                                resultGrid[ny][nx] = {(float)realX, (float)realY, res.u, res.v, res.ux, res.uy, res.vx, res.vy,
-                                                      res.correlation_score, true, tid, order, resultGrid[ny][nx].mesh_assignment_type,
-                                                      needed_rescue, res.iters};
-                            }
+                            // 🚀 FIX: Use res.iters at the end
+                            resultGrid[ny][nx] = {(float)realX, (float)realY, res.u, res.v, res.ux, res.uy, res.vx, res.vy,
+                                                  res.correlation_score, true, tid, order, resultGrid[ny][nx].mesh_assignment_type,
+                                                  needed_rescue, res.iters};
                             ctx.global_points_solved.fetch_add(1, std::memory_order_relaxed); local_points_solved++;
                             pending_pushes.push_back(Semper::SeedNode(nx, ny, res.u, res.v, res.ux, res.uy, res.vx, res.vy, res.correlation_score));
                         } else {
-                            std::lock_guard<std::mutex> lg(grid_mutex);
                             resultGrid[ny][nx].corr = CORR_INVALID;
                             resultGrid[ny][nx].used_simplex = needed_rescue;
                             // 🚀 FIX: Assign the real iterations

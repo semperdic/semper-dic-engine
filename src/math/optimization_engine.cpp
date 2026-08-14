@@ -149,6 +149,11 @@ namespace Semper {
 
         // 🚀 Use the centralized builder
         std::vector<bool> ref_valid = build_ref_valid(subset);
+        // invalid_ref_pixels is a pure function of ref_valid — the same count at
+        // every return site below regardless of iteration/convergence outcome.
+        // Computed once here instead of re-summed at each of the 5 returns.
+        int invalid_ref_count = 0;
+        for (size_t k = 0; k < n; ++k) { if (!ref_valid[k]) invalid_ref_count++; }
         for (int iter = 0; iter < max_iter; ++iter) {
             float def_sum = 0.0f;
             int valid_pixels = 0;
@@ -193,7 +198,7 @@ namespace Semper {
             // DICe PARITY: 90% survival threshold.
             if (valid_pixels < static_cast<int>(n * 0.90f)) {
                 AnalysisResult res = {W(0, 2), W(1, 2), W(0, 0) - 1.0f, W(0, 1), W(1, 0), W(1, 1) - 1.0f, 1, 2.0f, iter};
-                for (size_t k = 0; k < n; ++k) { if (!ref_valid[k]) res.invalid_ref_pixels++; }
+                res.invalid_ref_pixels = invalid_ref_count;
                 return res;
             }
 
@@ -294,7 +299,7 @@ namespace Semper {
                 // 🚀 DICe 100% Deactivation Check
                 if (valid_survivors == 0) {
                     AnalysisResult res = {W(0, 2), W(1, 2), W(0, 0) - 1.0f, W(0, 1), W(1, 0), W(1, 1) - 1.0f, 1, 2.0f, iter + 1};
-                    for (size_t k = 0; k < n; ++k) { if (!ref_valid[k]) res.invalid_ref_pixels++; }
+                    res.invalid_ref_pixels = invalid_ref_count;
                     return res;
                 }
 
@@ -304,18 +309,18 @@ namespace Semper {
                 if (sum_grad <= 0.0f) {
                     // Reject: Surviving pixels lack 2D physical texture (sigma returns -1.0 in DICe)
                     AnalysisResult res = {W(0, 2), W(1, 2), W(0, 0) - 1.0f, W(0, 1), W(1, 0), W(1, 1) - 1.0f, 1, 2.0f, iter + 1};
-                    for (size_t k = 0; k < n; ++k) { if (!ref_valid[k]) res.invalid_ref_pixels++; }
+                    res.invalid_ref_pixels = invalid_ref_count;
                     return res;
                 }
 
                 AnalysisResult res = {W(0, 2), W(1, 2), W(0, 0) - 1.0f, W(0, 1), W(1, 0), W(1, 1) - 1.0f, 0, final_score, iter + 1};
-                for (size_t k = 0; k < n; ++k) { if (!ref_valid[k]) res.invalid_ref_pixels++; }
+                res.invalid_ref_pixels = invalid_ref_count;
                 return res;
             }
         }
 
         AnalysisResult res = {W(0, 2), W(1, 2), W(0, 0) - 1.0f, W(0, 1), W(1, 0), W(1, 1) - 1.0f, 1, final_score, max_iter};
-        for (size_t k = 0; k < n; ++k) { if (!ref_valid[k]) res.invalid_ref_pixels++; }
+        res.invalid_ref_pixels = invalid_ref_count;
         return res;
     }
 
