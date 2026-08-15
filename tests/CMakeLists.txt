@@ -60,6 +60,7 @@ set(DIC_UNIT_TESTS
 set(DIC_INTEGRATION_TESTS
         integration/test_optimization_engine.cpp
         integration/test_robustness.cpp
+        integration/test_golden_corpus.cpp
 )
 set(DIC_DICE_TESTS
         dice/test_translation_synthetic.cpp
@@ -122,6 +123,7 @@ target_include_directories(dic_tests SYSTEM PRIVATE
 
 target_compile_definitions(dic_tests PRIVATE
         DICE_FIXTURES_DIR="${CMAKE_CURRENT_SOURCE_DIR}/fixtures/dice"
+        NATIVE_TESTS_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}"
         SEMPER_HOST_LOG=1
 )
 
