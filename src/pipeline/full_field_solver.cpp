@@ -247,11 +247,6 @@ int run_full_field(
         auto t_prepass_start = std::chrono::high_resolution_clock::now();
         HessianPool hessian_pool(gridW * gridH);
 
-        // Track standard deviations to build an adaptive threshold
-        double sum_std_dev = 0.0;
-        int valid_std_count = 0;
-        std::mutex std_mutex;
-
     #pragma omp parallel for schedule(static) num_threads(safe_cores)
         for (int pool_idx = 0; pool_idx < gridW * gridH; ++pool_idx) {
             // OpenMP forbids breaking out of a parallel for, so a cancel skips
@@ -262,12 +257,6 @@ int run_full_field(
             if (!resultGrid[gy][gx].solved) {
                 int realX = params.rect_x + gx * params.step, realY = params.rect_y + gy * params.step;
                 hessian_pool[pool_idx] = SubsetPrecomputer::compute_hessian_only(*cache.ref_img, realX, realY, params.subset_size);
-
-                if (hessian_pool[pool_idx].valid) {
-                    std::lock_guard<std::mutex> lock(std_mutex);
-                    sum_std_dev += hessian_pool[pool_idx].std_dev;
-                    valid_std_count++;
-                }
             }
         }
 

@@ -164,7 +164,7 @@ void fill_engine_metrics(
         const int tot_simp_saved = s.a_simp_saved + s.b_simp_saved;
         const int tot_simp_dead = s.a_simp_dead + s.b_simp_dead;
 
-        float metrics_data[17];
+        float metrics_data[19];
 
             // 0-4: Point Counts
             metrics_data[0] = (float)total_valid_points;      // Total Attempted
@@ -200,7 +200,15 @@ void fill_engine_metrics(
             metrics_data[16] = (mesh_quality == MeshQuality::FULL) ? 2.0f
                              : (mesh_quality == MeshQuality::SPARSE) ? 1.0f : 0.0f;
 
-            int ncopy = (metrics_len >= 17) ? 17 : 16;
+            // 17-18: Simplex-rescue cost (Phase 3.2 — "measure before touching").
+            // Already computed and aggregated above (log_profiling_summary logs
+            // the same s.a_simp+s.b_simp / s.a_icgn+s.b_icgn via LOGD) but never
+            // reached the app before this — these two slots are the only change,
+            // no solve behaviour is touched.
+            metrics_data[17] = (float)(s.a_simp + s.b_simp);  // Total simplex-rescue time (ms)
+            metrics_data[18] = (float)(s.a_icgn + s.b_icgn);  // Total ICGN time (ms) — the main solve
+
+            int ncopy = (metrics_len >= 19) ? 19 : (metrics_len >= 17) ? 17 : 16;
         for (int mi = 0; mi < ncopy; ++mi) metrics[mi] = metrics_data[mi];
     }
 }

@@ -149,16 +149,31 @@ namespace Semper {
 
         // 🚀 Use the centralized builder
         std::vector<bool> ref_valid = build_ref_valid(subset);
+        // invalid_ref_pixels is a pure function of ref_valid — the same count at
+        // every return site below regardless of iteration/convergence outcome.
+        // Computed once here instead of re-summed at each of the 5 returns.
+        int invalid_ref_count = 0;
+        for (size_t k = 0; k < n; ++k) { if (!ref_valid[k]) invalid_ref_count++; }
         for (int iter = 0; iter < max_iter; ++iter) {
             float def_sum = 0.0f;
             int valid_pixels = 0;
 
             // 1. Unrolled Affine Warp & Interpolation
-            for (size_t i = 0; i < n; ++i) {
-                // 🚀 OPTIMIZATION T1.1: Use pre-converted floats. Eliminates SCVTF latency.
+            //
+            // Batches interpolation 4 pixels at a time via interpolate_keys_fourth_x4
+            // / interpolate_bicubic_x4 when 4 consecutive pixels are available and all
+            // pass their own px/py guard — those _x4 functions do the identical
+            // per-lane arithmetic in the identical order interpolate_keys_fourth /
+            // interpolate_bicubic would (see image.hpp), so this changes no single
+            // pixel's interpolated value, only how many are computed per call. Any
+            // pixel that can't be batched (guard failure in the group, or fewer than
+            // 4 pixels left) falls back to the original one-at-a-time scalar call —
+            // same function, same result, just not batched. def_sum/valid_pixels
+            // accumulate in the same i=0..n-1 order either way.
+            size_t i = 0;
+            while (i < n) {
                 float x = subset.x_offsets_f[i];
                 float y = subset.y_offsets_f[i];
-
                 float final_x = subset.cx + W(0, 0) * x + W(0, 1) * y + W(0, 2);
                 float final_y = subset.cy + W(1, 0) * x + W(1, 1) * y + W(1, 2);
 
@@ -168,21 +183,71 @@ namespace Semper {
                 if (px < 4 || px >= def_img.width - 4 ||
                     py < 4 || py >= def_img.height - 4) {
                     def_vals[i] = -1.0f;
+                    ++i;
                     continue;
                 }
 
-                float val = use_6x6_interpolator ?
-                            def_img.interpolate_keys_fourth(final_x, final_y) :
-                            def_img.interpolate_bicubic(final_x, final_y);
+                bool batched = false;
+                if (i + 4 <= n) {
+                    float fx[4] = {final_x, 0.0f, 0.0f, 0.0f};
+                    float fy[4] = {final_y, 0.0f, 0.0f, 0.0f};
+                    bool group_ok = true;
+                    for (int k = 1; k < 4; ++k) {
+                        size_t idx = i + static_cast<size_t>(k);
+                        float xk = subset.x_offsets_f[idx];
+                        float yk = subset.y_offsets_f[idx];
+                        float fxk = subset.cx + W(0, 0) * xk + W(0, 1) * yk + W(0, 2);
+                        float fyk = subset.cy + W(1, 0) * xk + W(1, 1) * yk + W(1, 2);
+                        int pxk = ((int)(fxk + 0.5f) == (int)(fxk)) ? (int)(fxk) : (int)(fxk) + 1;
+                        int pyk = ((int)(fyk + 0.5f) == (int)(fyk)) ? (int)(fyk) : (int)(fyk) + 1;
+                        if (pxk < 4 || pxk >= def_img.width - 4 || pyk < 4 || pyk >= def_img.height - 4) {
+                            group_ok = false;
+                            break;
+                        }
+                        fx[k] = fxk;
+                        fy[k] = fyk;
+                    }
 
-                // DICe LAYER 2: The Mask-Aware Drop
-                // Only accept pixels that are physically valid in BOTH the reference mask and the deformed image
-                if (val > 0.0f && ref_valid[i]) {
-                    def_vals[i] = val;
-                    def_sum += val;
-                    valid_pixels++;
-                } else {
-                    def_vals[i] = -1.0f;
+                    if (group_ok) {
+                        float vals[4];
+                        if (use_6x6_interpolator) {
+                            def_img.interpolate_keys_fourth_x4(fx, fy, vals);
+                        } else {
+                            def_img.interpolate_bicubic_x4(fx, fy, vals);
+                        }
+                        for (int k = 0; k < 4; ++k) {
+                            size_t idx = i + static_cast<size_t>(k);
+                            float val = vals[k];
+                            // DICe LAYER 2: The Mask-Aware Drop — only accept pixels
+                            // valid in both the reference mask and the deformed image.
+                            if (val > 0.0f && ref_valid[idx]) {
+                                def_vals[idx] = val;
+                                def_sum += val;
+                                valid_pixels++;
+                            } else {
+                                def_vals[idx] = -1.0f;
+                            }
+                        }
+                        i += 4;
+                        batched = true;
+                    }
+                }
+
+                if (!batched) {
+                    float val = use_6x6_interpolator ?
+                                def_img.interpolate_keys_fourth(final_x, final_y) :
+                                def_img.interpolate_bicubic(final_x, final_y);
+
+                    // DICe LAYER 2: The Mask-Aware Drop
+                    // Only accept pixels that are physically valid in BOTH the reference mask and the deformed image
+                    if (val > 0.0f && ref_valid[i]) {
+                        def_vals[i] = val;
+                        def_sum += val;
+                        valid_pixels++;
+                    } else {
+                        def_vals[i] = -1.0f;
+                    }
+                    ++i;
                 }
             }
 
@@ -193,7 +258,7 @@ namespace Semper {
             // DICe PARITY: 90% survival threshold.
             if (valid_pixels < static_cast<int>(n * 0.90f)) {
                 AnalysisResult res = {W(0, 2), W(1, 2), W(0, 0) - 1.0f, W(0, 1), W(1, 0), W(1, 1) - 1.0f, 1, 2.0f, iter};
-                for (size_t k = 0; k < n; ++k) { if (!ref_valid[k]) res.invalid_ref_pixels++; }
+                res.invalid_ref_pixels = invalid_ref_count;
                 return res;
             }
 
@@ -294,7 +359,7 @@ namespace Semper {
                 // 🚀 DICe 100% Deactivation Check
                 if (valid_survivors == 0) {
                     AnalysisResult res = {W(0, 2), W(1, 2), W(0, 0) - 1.0f, W(0, 1), W(1, 0), W(1, 1) - 1.0f, 1, 2.0f, iter + 1};
-                    for (size_t k = 0; k < n; ++k) { if (!ref_valid[k]) res.invalid_ref_pixels++; }
+                    res.invalid_ref_pixels = invalid_ref_count;
                     return res;
                 }
 
@@ -304,18 +369,18 @@ namespace Semper {
                 if (sum_grad <= 0.0f) {
                     // Reject: Surviving pixels lack 2D physical texture (sigma returns -1.0 in DICe)
                     AnalysisResult res = {W(0, 2), W(1, 2), W(0, 0) - 1.0f, W(0, 1), W(1, 0), W(1, 1) - 1.0f, 1, 2.0f, iter + 1};
-                    for (size_t k = 0; k < n; ++k) { if (!ref_valid[k]) res.invalid_ref_pixels++; }
+                    res.invalid_ref_pixels = invalid_ref_count;
                     return res;
                 }
 
                 AnalysisResult res = {W(0, 2), W(1, 2), W(0, 0) - 1.0f, W(0, 1), W(1, 0), W(1, 1) - 1.0f, 0, final_score, iter + 1};
-                for (size_t k = 0; k < n; ++k) { if (!ref_valid[k]) res.invalid_ref_pixels++; }
+                res.invalid_ref_pixels = invalid_ref_count;
                 return res;
             }
         }
 
         AnalysisResult res = {W(0, 2), W(1, 2), W(0, 0) - 1.0f, W(0, 1), W(1, 0), W(1, 1) - 1.0f, 1, final_score, max_iter};
-        for (size_t k = 0; k < n; ++k) { if (!ref_valid[k]) res.invalid_ref_pixels++; }
+        res.invalid_ref_pixels = invalid_ref_count;
         return res;
     }
 
