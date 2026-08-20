@@ -1,7 +1,7 @@
 """Semper DIC engine — Python bindings.
 
 Thin, NumPy-native wrapper over the same C++ core the Android app links. See
-docs/engine/ENGINE_APP_CONTRACT.md for the frozen output/metrics/error contracts.
+docs/CONTRACT.md for the frozen output/metrics/error contracts.
 
 Example
 -------
@@ -22,7 +22,15 @@ import numpy as np
 from ._semper import Engine as _Engine
 from ._semper import __version__
 
-__all__ = ["Engine", "Result", "DicError", "__version__"]
+__all__ = [
+    "Engine",
+    "Result",
+    "DicError",
+    "ERR_ROI",
+    "ERR_INIT",
+    "ERR_CANCELLED",
+    "__version__",
+]
 
 # Frozen error codes (see the contract doc). >= 0 is a valid point count.
 ERR_ROI = -2

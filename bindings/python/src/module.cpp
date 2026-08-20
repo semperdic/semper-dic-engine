@@ -1,6 +1,6 @@
 // pybind11 bindings for the Semper DIC engine — wraps the C++ core directly.
 // NumPy in, (N, 8) points + (17,) metrics out. Behavior is identical to the
-// Android/JNI path; see docs ENGINE_APP_CONTRACT.md for the frozen formats.
+// Android/JNI path; see docs/CONTRACT.md for the frozen formats.
 #include <pybind11/pybind11.h>
 #include <pybind11/numpy.h>
 #include <pybind11/functional.h>

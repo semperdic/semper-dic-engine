@@ -8,7 +8,7 @@ set_target_properties(semper_android PROPERTIES OUTPUT_NAME semper_core)
 
 # Public engine headers only (+ the adapter's own dir for jni_log.hpp). The adapter
 # deliberately does NOT include ${SEMPER_ROOT}/src, so it can be lifted into the app
-# repo and link just the public engine — see docs/engine/ENGINE_APP_CONTRACT.md.
+# repo and link just the public engine — see docs/CONTRACT.md.
 target_include_directories(semper_android PRIVATE
         ${CMAKE_CURRENT_SOURCE_DIR}/jni
         ${SEMPER_ROOT}/include

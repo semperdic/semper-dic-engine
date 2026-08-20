@@ -145,8 +145,8 @@ jobs:
             -DSEMPER_BUILD_TESTS=OFF \
             -DSEMPER_ANDROID=OFF
 
-      - name: Build semper_c + smoke
-        run: cmake --build build/sdk --target semper_c semper_c_smoke -j"$(nproc)"
+      - name: Build semper_c + smoke + contract
+        run: cmake --build build/sdk --target semper_c semper_c_smoke semper_c_contract -j"$(nproc)"
 
       - name: Run C smoke
         run: |
@@ -159,3 +159,80 @@ jobs:
             [ -d "$d" ] && export LD_LIBRARY_PATH="$(pwd)/$d:$LD_LIBRARY_PATH"
           done
           "$SMOKE"
+
+      - name: Run C ABI contract
+        run: |
+          CONTRACT=$(find build/sdk -name semper_c_contract -type f | head -n1)
+          test -n "$CONTRACT"
+          export LD_LIBRARY_PATH="$(dirname "$CONTRACT"):$(dirname "$CONTRACT")/../adapters/c:${LD_LIBRARY_PATH:-}"
+          for d in build/sdk/adapters/c build/sdk/lib build/sdk/bin; do
+            [ -d "$d" ] && export LD_LIBRARY_PATH="$(pwd)/$d:$LD_LIBRARY_PATH"
+          done
+          "$CONTRACT"
+
+      - name: Check exported ABI symbols against golden list
+        run: |
+          # VERSION/SOVERSION makes libsemper_c.so a symlink to
+          # libsemper_c.so.$MAJOR; -type f would skip the link and fail
+          # the test -n check with no nm output.
+          LIB=$(find build/sdk -name 'libsemper_c.so' | head -n1)
+          test -n "$LIB"
+          echo "Inspecting $LIB"
+          # The six documented entry points are the ONLY symbols that may be
+          # exported (visibility is hidden + explicit SEMPER_C_API). An accidental
+          # export, or a dropped annotation, changes this set and fails the diff.
+          nm -D --defined-only "$LIB" | awk '$2=="T"{print $3}' \
+            | grep '^semper_' | sort > /tmp/abi_symbols.actual
+          echo "Exported semper_* symbols:"; cat /tmp/abi_symbols.actual
+          if ! diff -u tests/c/abi_symbols.txt /tmp/abi_symbols.actual; then
+            echo "::error::Exported C ABI symbol set drifted from tests/c/abi_symbols.txt"
+            echo "If this change is intentional, update the golden list and bump the"
+            echo "version per docs/CONTRACT.md §A.1."
+            exit 1
+          fi
+
+  # ===================================================================
+  # Coverage — report-only, no gate (SEMPER_COVERAGE). Surfaces which src/
+  # files the host suite exercises so future boundary gaps are visible.
+  # ===================================================================
+  coverage:
+    name: Coverage (report-only)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Install OpenCV + gcovr
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq --no-install-recommends libopencv-dev gcovr
+
+      - name: Configure (coverage)
+        run: >
+          cmake -S tests -B build/cov
+          -DCMAKE_BUILD_TYPE=Debug
+          -DSEMPER_COVERAGE=ON
+          -DDIC_REQUIRE_OPENCV=ON
+
+      - name: Build
+        run: cmake --build build/cov -j"$(nproc)"
+
+      - name: Run dic_tests
+        run: ./build/cov/dic_tests
+
+      - name: gcovr report (src/ only)
+        run: |
+          # Report-only: no --fail-under, no threshold. Text summary to the log,
+          # machine-readable XML as an artifact.
+          gcovr --root . build/cov --filter 'src/' --print-summary --xml-pretty -o coverage.xml
+          echo "----- src/ line coverage -----"
+          gcovr --root . build/cov --filter 'src/' --txt
+
+      - name: Upload coverage.xml
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-xml
+          path: coverage.xml

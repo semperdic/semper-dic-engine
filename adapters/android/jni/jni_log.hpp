@@ -3,7 +3,7 @@
 
 // Local logging for the JNI adapter. Kept self-contained (no engine-internal
 // headers) so this adapter can live in the app repo and link only the *public*
-// engine — see docs/engine/ENGINE_APP_CONTRACT.md.
+// engine — see docs/CONTRACT.md.
 
 #include <android/log.h>
 

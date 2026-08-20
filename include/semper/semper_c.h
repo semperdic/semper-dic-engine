@@ -9,7 +9,7 @@
  * the engine from other languages and toolchains (the Python bindings use the C++
  * core directly; C/C#/Rust/etc. use this).
  *
- * Contract (see docs ENGINE_APP_CONTRACT.md): the return codes and the packed
+ * Contract (see docs/CONTRACT.md): the return codes and the packed
  * output layout below are FROZEN — 8 floats per point, [x,y,u,v,exx,eyy,exy,corr].
  *
  * Threading: an engine handle is NOT internally synchronized; use one handle per
@@ -94,7 +94,7 @@ SEMPER_C_API int semper_run(semper_engine* eng,
 /* Request cancellation of the run in flight on `eng`. Thread-safe. */
 SEMPER_C_API void semper_cancel(semper_engine* eng);
 
-/* Semantic version string, e.g. "0.1.0". Never NULL. */
+/* Semantic version string, "MAJOR.MINOR.PATCH" (e.g. "0.1.5"). Never NULL. */
 SEMPER_C_API const char* semper_version(void);
 
 #ifdef __cplusplus

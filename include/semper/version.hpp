@@ -1,7 +1,7 @@
 #ifndef SEMPER_VERSION_HPP
 #define SEMPER_VERSION_HPP
 
-// Semantic version of the public engine surface (see docs ENGINE_APP_CONTRACT):
+// Semantic version of the public engine surface (see docs/CONTRACT.md §A.1):
 //   major — a break to any Frozen/Stable contract (output packing, signatures, codes)
 //   minor — additive Stable/Additive-only change, or a new capability
 //   patch — internal-only improvement (accuracy, speed) with no surface change

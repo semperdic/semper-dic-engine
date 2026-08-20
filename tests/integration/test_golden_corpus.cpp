@@ -16,9 +16,10 @@
 // pixel from a local container under -ffast-math, mostly on a handful
 // of poorly conditioned 6x6 subsets. The tolerances below cover that
 // noise while still failing on a status flip or a systematic field shift.
-// Sanitizer builds skip this suite: instrumentation changes floating-point
-// results enough to trip the relative check, and the other suites already
-// cover memory safety / races on the same solver.
+// Sanitizer and coverage builds skip this suite: instrumentation and
+// Debug -O0 change floating-point results (and which subsets initialize)
+// enough to trip the relative check. The other suites still cover those
+// builds.
 //
 // Usage:
 //   Capture (before making a change):
@@ -209,8 +210,8 @@ namespace {
 } // namespace
 
 TEST_CASE(GoldenCorpus, CaptureOrCompare_4x4Bicubic) {
-#ifdef SEMPER_SANITIZER_BUILD
-    std::printf("  [4x4] skipped under sanitizers (numeric golden is a Release-host gate)\n");
+#if defined(SEMPER_SANITIZER_BUILD) || defined(SEMPER_COVERAGE_BUILD)
+    std::printf("  [4x4] skipped under sanitizer/coverage (numeric golden is a Release-host gate)\n");
     return;
 #endif
     if (capture_mode()) {
@@ -224,8 +225,8 @@ TEST_CASE(GoldenCorpus, CaptureOrCompare_4x4Bicubic) {
 }
 
 TEST_CASE(GoldenCorpus, CaptureOrCompare_6x6Keys) {
-#ifdef SEMPER_SANITIZER_BUILD
-    std::printf("  [6x6] skipped under sanitizers (numeric golden is a Release-host gate)\n");
+#if defined(SEMPER_SANITIZER_BUILD) || defined(SEMPER_COVERAGE_BUILD)
+    std::printf("  [6x6] skipped under sanitizer/coverage (numeric golden is a Release-host gate)\n");
     return;
 #endif
     if (capture_mode()) {
