@@ -225,7 +225,7 @@ Java_com_indicvision_semper_SemperNativeLib_computeFullFieldDirect(
         if (attached) jvm->DetachCurrentThread();
     };
 
-    float metrics_buf[17] = {0};
+    float metrics_buf[19] = {0};
     float* metrics_ptr = nullptr;
     int metrics_len = 0;
     if (out_metrics != nullptr) {
@@ -235,13 +235,13 @@ Java_com_indicvision_semper_SemperNativeLib_computeFullFieldDirect(
 
     int result = Semper::pipeline::run_full_field(
             g_cache, defMat, roiMask, params, output_ptr, output_capacity,
-            metrics_ptr, metrics_ptr ? 17 : 0, on_progress);
+            metrics_ptr, metrics_ptr ? 19 : 0, on_progress);
 
     if (globalCallback != nullptr) {
         env->DeleteGlobalRef(globalCallback);
     }
     if (metrics_ptr != nullptr && out_metrics != nullptr) {
-        int ncopy = (metrics_len >= 17) ? 17 : 16;
+        int ncopy = (metrics_len >= 19) ? 19 : (metrics_len >= 17) ? 17 : 16;
         env->SetFloatArrayRegion(out_metrics, 0, ncopy, metrics_buf);
     }
     return result;

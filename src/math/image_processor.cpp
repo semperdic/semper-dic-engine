@@ -118,6 +118,54 @@ namespace Semper {
         return val;
     }
 
+    // Lane k's block below is a verbatim copy of interpolate_keys_fourth's
+    // weight computation and 6x6 sum, just indexed by k instead of being one
+    // point per call — see image.hpp's precondition comment. Deliberately NOT
+    // sharing a helper with the single-point version: keeping the operation
+    // sequence textually identical here is what makes "this changes no
+    // single point's arithmetic" easy to verify by inspection.
+    void Image::interpolate_keys_fourth_x4(const scalar_t x[4], const scalar_t y[4], scalar_t out[4]) const {
+        int xi[4], yi[4];
+        float dx[4], dy[4];
+        float wx[4][6], wy[4][6];
+        for (int k = 0; k < 4; ++k) {
+            xi[k] = static_cast<int>(x[k]);
+            yi[k] = static_cast<int>(y[k]);
+            dx[k] = x[k] - xi[k];
+            dy[k] = y[k] - yi[k];
+
+            wx[k][0] = keys_f2(dx[k] + 2.0f);
+            wx[k][1] = keys_f1(dx[k] + 1.0f);
+            wx[k][2] = keys_f0(dx[k]);
+            wx[k][3] = keys_f0(1.0f - dx[k]);
+            wx[k][4] = keys_f1(2.0f - dx[k]);
+            wx[k][5] = keys_f2(3.0f - dx[k]);
+
+            wy[k][0] = keys_f2(dy[k] + 2.0f);
+            wy[k][1] = keys_f1(dy[k] + 1.0f);
+            wy[k][2] = keys_f0(dy[k]);
+            wy[k][3] = keys_f0(1.0f - dy[k]);
+            wy[k][4] = keys_f1(2.0f - dy[k]);
+            wy[k][5] = keys_f2(3.0f - dy[k]);
+        }
+
+        float val[4] = {0.0f, 0.0f, 0.0f, 0.0f};
+        for (int j = -2; j <= 3; ++j) {
+            for (int k = 0; k < 4; ++k) {
+                const scalar_t* row_ptr = &intensities[(yi[k] + j) * width + xi[k]];
+                float row_val = 0.0f;
+                row_val += row_ptr[-2] * wx[k][0];
+                row_val += row_ptr[-1] * wx[k][1];
+                row_val += row_ptr[0]  * wx[k][2];
+                row_val += row_ptr[1]  * wx[k][3];
+                row_val += row_ptr[2]  * wx[k][4];
+                row_val += row_ptr[3]  * wx[k][5];
+                val[k] += row_val * wy[k][j + 2];
+            }
+        }
+        for (int k = 0; k < 4; ++k) out[k] = val[k];
+    }
+
     // ========================================================================
     // STANDARD 4x4 BICUBIC INTERPOLATION
     // ========================================================================
@@ -173,5 +221,35 @@ namespace Semper {
         }
 
         return val;
+    }
+
+    // Verbatim per-lane copy of interpolate_bicubic — see image.hpp's
+    // precondition comment and interpolate_keys_fourth_x4's note above.
+    void Image::interpolate_bicubic_x4(const scalar_t x[4], const scalar_t y[4], scalar_t out[4]) const {
+        int xi[4], yi[4];
+        float dx[4], dy[4];
+        float wx[4][4], wy[4][4];
+        for (int k = 0; k < 4; ++k) {
+            xi[k] = static_cast<int>(x[k]);
+            yi[k] = static_cast<int>(y[k]);
+            dx[k] = x[k] - xi[k];
+            dy[k] = y[k] - yi[k];
+            get_keys_weights(dx[k], wx[k][0], wx[k][1], wx[k][2], wx[k][3]);
+            get_keys_weights(dy[k], wy[k][0], wy[k][1], wy[k][2], wy[k][3]);
+        }
+
+        float val[4] = {0.0f, 0.0f, 0.0f, 0.0f};
+        for (int j = -1; j <= 2; ++j) {
+            for (int k = 0; k < 4; ++k) {
+                const scalar_t* row_ptr = &intensities[(yi[k] + j) * width + xi[k]];
+                float row_val = 0.0f;
+                row_val += row_ptr[-1] * wx[k][0];
+                row_val += row_ptr[0]  * wx[k][1];
+                row_val += row_ptr[1]  * wx[k][2];
+                row_val += row_ptr[2]  * wx[k][3];
+                val[k] += row_val * wy[k][j + 1];
+            }
+        }
+        for (int k = 0; k < 4; ++k) out[k] = val[k];
     }
 }

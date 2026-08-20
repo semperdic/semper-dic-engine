@@ -40,6 +40,9 @@ set(DIC_SANITIZER "" CACHE STRING "Comma-separated sanitizers (address,undefined
 if (DIC_SANITIZER AND NOT MSVC)
     add_compile_options(-fsanitize=${DIC_SANITIZER} -g -fno-omit-frame-pointer)
     add_link_options(-fsanitize=${DIC_SANITIZER})
+    # Golden-corpus numbers are a Release-host gate. Sanitizers change
+    # floating-point results enough to trip that tight relative check.
+    add_compile_definitions(SEMPER_SANITIZER_BUILD=1)
 endif ()
 
 # Report-only gcov/llvm-cov instrumentation: build with -DSEMPER_COVERAGE=ON,
@@ -60,6 +63,7 @@ set(DIC_UNIT_TESTS
 set(DIC_INTEGRATION_TESTS
         integration/test_optimization_engine.cpp
         integration/test_robustness.cpp
+        integration/test_golden_corpus.cpp
 )
 set(DIC_DICE_TESTS
         dice/test_translation_synthetic.cpp
@@ -122,6 +126,7 @@ target_include_directories(dic_tests SYSTEM PRIVATE
 
 target_compile_definitions(dic_tests PRIVATE
         DICE_FIXTURES_DIR="${CMAKE_CURRENT_SOURCE_DIR}/fixtures/dice"
+        NATIVE_TESTS_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}"
         SEMPER_HOST_LOG=1
 )
 
