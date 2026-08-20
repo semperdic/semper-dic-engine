@@ -8,10 +8,14 @@
 // the aggregate median-error check while still silently flipping which
 // points converge or introducing a small systematic bias; this catches that.
 //
-// -ffast-math and -flto are enabled repo-wide (see tests/CMakeLists.txt and
-// the parent CMakeLists.txt), so bit-exact reproducibility is not something
-// this build guarantees even for an IDENTICAL binary rerun — hence a
-// tolerance-based diff, not a byte-for-byte one.
+// -ffast-math is enabled for host tests (see tests/CMakeLists.txt), so
+// bit-exact reproducibility is not something this build guarantees even
+// for an IDENTICAL binary rerun — hence a tolerance-based diff, not a
+// byte-for-byte one. Fixtures are captured from an Ubuntu GCC Release
+// build matching the CI "Host tests" job. Sanitizer builds skip this
+// suite: instrumentation changes floating-point results enough to trip
+// the tight relative check, and the other suites already cover memory
+// safety / races on the same solver.
 //
 // Usage:
 //   Capture (before making a change):
@@ -199,6 +203,10 @@ namespace {
 } // namespace
 
 TEST_CASE(GoldenCorpus, CaptureOrCompare_4x4Bicubic) {
+#ifdef SEMPER_SANITIZER_BUILD
+    std::printf("  [4x4] skipped under sanitizers (numeric golden is a Release-host gate)\n");
+    return;
+#endif
     if (capture_mode()) {
         const auto points = run_corpus(/*use_6x6=*/false);
         const auto path = golden_file_path() + ".bicubic";
@@ -210,6 +218,10 @@ TEST_CASE(GoldenCorpus, CaptureOrCompare_4x4Bicubic) {
 }
 
 TEST_CASE(GoldenCorpus, CaptureOrCompare_6x6Keys) {
+#ifdef SEMPER_SANITIZER_BUILD
+    std::printf("  [6x6] skipped under sanitizers (numeric golden is a Release-host gate)\n");
+    return;
+#endif
     if (capture_mode()) {
         const auto points = run_corpus(/*use_6x6=*/true);
         const auto path = golden_file_path() + ".keys6x6";

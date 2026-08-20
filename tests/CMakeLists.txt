@@ -40,6 +40,9 @@ set(DIC_SANITIZER "" CACHE STRING "Comma-separated sanitizers (address,undefined
 if (DIC_SANITIZER AND NOT MSVC)
     add_compile_options(-fsanitize=${DIC_SANITIZER} -g -fno-omit-frame-pointer)
     add_link_options(-fsanitize=${DIC_SANITIZER})
+    # Golden-corpus numbers are a Release-host gate. Sanitizers change
+    # floating-point results enough to trip that tight relative check.
+    add_compile_definitions(SEMPER_SANITIZER_BUILD=1)
 endif ()
 
 # Report-only gcov/llvm-cov instrumentation: build with -DSEMPER_COVERAGE=ON,
