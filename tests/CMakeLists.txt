@@ -51,6 +51,9 @@ option(SEMPER_COVERAGE "Instrument the host tests for coverage (gcov)" OFF)
 if (SEMPER_COVERAGE AND NOT MSVC)
     add_compile_options(--coverage -O0 -g)
     add_link_options(--coverage)
+    # Golden-corpus numbers are a Release-host gate. Coverage builds are
+    # Debug -O0, which changes how many subsets initialize and their values.
+    add_compile_definitions(SEMPER_COVERAGE_BUILD=1)
 endif ()
 
 set(DIC_UNIT_TESTS
