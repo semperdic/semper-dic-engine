@@ -94,7 +94,7 @@ SEMPER_C_API int semper_run(semper_engine* eng,
 /* Request cancellation of the run in flight on `eng`. Thread-safe. */
 SEMPER_C_API void semper_cancel(semper_engine* eng);
 
-/* Semantic version string, "MAJOR.MINOR.PATCH" (e.g. "0.1.5"). Never NULL. */
+/* Semantic version string, "MAJOR.MINOR.PATCH" (e.g. "0.2.0"). Never NULL. */
 SEMPER_C_API const char* semper_version(void);
 
 #ifdef __cplusplus

@@ -6,8 +6,8 @@
 //   minor — additive Stable/Additive-only change, or a new capability
 //   patch — internal-only improvement (accuracy, speed) with no surface change
 #define SEMPER_VERSION_MAJOR 0
-#define SEMPER_VERSION_MINOR 1
-#define SEMPER_VERSION_PATCH 5
+#define SEMPER_VERSION_MINOR 2
+#define SEMPER_VERSION_PATCH 0
 
 #define SEMPER_STRINGIFY_(x) #x
 #define SEMPER_STRINGIFY(x) SEMPER_STRINGIFY_(x)
