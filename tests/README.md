@@ -1,6 +1,6 @@
 # Host-side native test suite
 
-Runs in this repository (`semperdic/semper-dic-engine`). The private Android
+Runs in this repository (`sempermechanics/semper-dic-engine`). The private Android
 app consumes a pinned submodule and does **not** re-run these host tiers.
 
 ```bash

@@ -1,6 +1,6 @@
 name: ci
 
-# Engine correctness lives here (semperdic/semper-dic-engine), not in the
+# Engine correctness lives here (sempermechanics/semper-dic-engine), not in the
 # private Android app. App CI only builds/links the pinned submodule.
 
 on:
